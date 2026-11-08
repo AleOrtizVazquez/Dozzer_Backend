@@ -342,13 +342,18 @@ public class BienServiceImpl implements BienService {
             Bien nuevo = new Bien();
             asignarDatos(nuevo, datos);
             nuevo.setUsuarioRegistro(solicitud.getUsuarioSolicitante());
-            return convertirAMap(bienRepository.save(nuevo));
+            Bien guardado = bienRepository.save(nuevo);
+            // Se liga a la solicitud para poder revocar el alta
+            solicitud.setBien(guardado);
+            return convertirAMap(guardado);
         }
         Bien existente = solicitud.getBien();
         if (existente == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "La solicitud no tiene un bien asociado");
         }
         if ("MODIFICACION".equals(operacion)) {
+            // Copia de cómo estaba el bien, para poder revocar el cambio
+            solicitud.setDatosAnteriores(datosDesdeBien(existente));
             asignarDatos(existente, datos);
             return convertirAMap(bienRepository.save(existente));
         }
@@ -408,6 +413,88 @@ public class BienServiceImpl implements BienService {
     private Bien buscarBienActivo(Long idBien) {
         return bienRepository.findByIdBienAndActivoTrue(idBien)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"No se encontró el bien solicitado"));
+    }
+
+    // Deshace en el inventario lo que aplicó una solicitud aprobada
+    public void revertirSolicitudAprobada(SolicitudBien solicitud) {
+        String operacion = solicitud.getTipoOperacion();
+
+        if ("ALTA".equals(operacion)) {
+            Bien creado = solicitud.getBien();
+            if (creado == null) {
+                // Altas aprobadas antes de ligar el bien: se localiza por su clave
+                Map<String,Object> datos = solicitud.getDatosPropuestos() == null ? Collections.emptyMap() : solicitud.getDatosPropuestos();
+                String clave = obtenerTexto(datos, "clave");
+                creado = clave == null ? null : bienRepository.findByClave(clave).orElse(null);
+            }
+            if (creado == null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "No se encontró el bien que creó esta solicitud");
+            }
+            final Long idCreado = creado.getIdBien();
+            boolean tieneOtras = solicitudBienRepository.existsByBien_IdBienAndIdSolicitudNot(idCreado, solicitud.getIdSolicitud());
+            if (tieneOtras) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "El bien creado ya tiene otras solicitudes (cambios o baja). Revócalas o resuélvelas primero.");
+            }
+            solicitud.setBien(null);
+            solicitudBienRepository.saveAndFlush(solicitud);
+            try {
+                bienRepository.delete(creado);
+                bienRepository.flush();
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "No se puede revocar el alta: el bien ya está relacionado con otros registros");
+            }
+            return;
+        }
+
+        Bien existente = solicitud.getBien();
+        if (existente == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La solicitud no tiene un bien asociado");
+        }
+        if ("MODIFICACION".equals(operacion)) {
+            if (solicitud.getDatosAnteriores() == null || solicitud.getDatosAnteriores().isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Esta modificación se aprobó antes de habilitar la revocación y no hay copia de los datos anteriores");
+            }
+            if (!Boolean.TRUE.equals(existente.getActivo())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "El bien ya fue dado de baja; no se puede revertir el cambio");
+            }
+            asignarDatos(existente, solicitud.getDatosAnteriores());
+            bienRepository.save(existente);
+            solicitud.setDatosAnteriores(null);
+            return;
+        }
+        if ("BAJA".equals(operacion)) {
+            existente.setActivo(true);
+            bienRepository.save(existente);
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tipo de operación de solicitud no válido");
+    }
+
+    // Datos del bien con las mismas llaves que usa asignarDatos
+    private Map<String,Object> datosDesdeBien(Bien b) {
+        Map<String,Object> d = new HashMap<>();
+        d.put("clave", b.getClave());
+        d.put("articulo", b.getArticulo());
+        d.put("caracteristicas", b.getCaracteristicas());
+        d.put("modelo", b.getModelo());
+        d.put("numeroSerie", b.getNumeroSerie());
+        d.put("unidadMedida", b.getUnidadMedida());
+        d.put("estatusInventario", b.getEstatusInventario());
+        d.put("estatusAsignacion", b.getEstatusAsignacion());
+        d.put("estadoFisico", b.getEstadoFisico());
+        d.put("cantidadPiezas", b.getCantidadPiezas());
+        d.put("idBienPadre", b.getBienPadre() != null ? b.getBienPadre().getIdBien() : null);
+        d.put("idClasificacion", b.getClasificacion() != null ? b.getClasificacion().getIdClasificacion() : null);
+        d.put("idSubcategoria", b.getSubcategoria() != null ? b.getSubcategoria().getIdSubcategoria() : null);
+        d.put("idMarca", b.getMarca() != null ? b.getMarca().getIdMarca() : null);
+        d.put("idColor", b.getColor() != null ? b.getColor().getIdColor() : null);
+        d.put("idResponsableArea", b.getResponsableArea() != null ? b.getResponsableArea().getIdPersona() : null);
+        d.put("idUsuarioDirecto", b.getUsuarioDirecto() != null ? b.getUsuarioDirecto().getIdPersona() : null);
+        d.put("idUbicacion", b.getUbicacion() != null ? b.getUbicacion().getIdUbicacion() : null);
+        return d;
     }
 
     private void asignarDatos(Bien bien,Map<String,Object> datos) {

@@ -105,6 +105,36 @@ public class AuthController {
   return Map.of("success", true, "message", "Contraseña actualizada correctamente");
  }
 
+ // "¿Olvidaste tu contraseña?" desde el login: la persona escribe su correo y una contraseña nueva.
+ // Decisión del negocio: sin verificación adicional (solo el correo).
+ // Las cuentas de ADMINISTRADOR quedan excluidas para que nadie tome el control del sistema así.
+ @PostMapping("/recuperar-password")
+ @Transactional
+ public Map<String,Object> recuperarPassword(@RequestBody Map<String,String> datos) {
+  String correo = datos == null || datos.get("correo") == null ? "" : datos.get("correo").trim();
+  String nueva = datos == null ? null : datos.get("passwordNueva");
+  if (correo.isEmpty() || !correo.contains("@") || correo.length() > 180) {
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe un correo electrónico válido");
+  }
+
+  Usuario usuario = usuarioRepository.findByCorreoIgnoreCase(correo)
+          .filter(u -> !Boolean.FALSE.equals(u.getActivo()))
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe una cuenta activa con ese correo"));
+
+  boolean esAdmin = usuario.getRoles().stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getNombre()));
+  if (esAdmin) {
+   throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+           "Las cuentas de administrador no pueden restablecerse desde aquí. Contacta al área de sistemas.");
+  }
+
+  validarPasswordNueva(nueva);
+  usuario.setPassword(passwordEncoder.encode(nueva));
+  usuario.setDebeCambiarPassword(false);
+  usuarioRepository.save(usuario);
+
+  return Map.of("success", true, "message", "Contraseña actualizada. Ya puedes entrar con ella.");
+ }
+
  private void validarPasswordNueva(String nueva) {
   if (nueva == null || nueva.length() < 8) {
    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La contraseña debe tener al menos 8 caracteres");

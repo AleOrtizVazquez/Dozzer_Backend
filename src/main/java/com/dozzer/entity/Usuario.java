@@ -44,6 +44,7 @@ public class Usuario {
     @Column(name = "debe_cambiar_password", nullable = false)
     private Boolean debeCambiarPassword = false;
 
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "usuario_roles",

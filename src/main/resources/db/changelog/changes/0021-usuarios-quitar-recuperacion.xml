@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- La recuperación de contraseña ya no pasa por el administrador: la columna deja de usarse. -->
+    <changeSet id="0021-usuarios-quitar-recuperacion" author="dozzer">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="usuarios" columnName="recuperacion_solicitada"/>
+        </preConditions>
+        <dropColumn tableName="usuarios" columnName="recuperacion_solicitada"/>
+    </changeSet>
+
+</databaseChangeLog>

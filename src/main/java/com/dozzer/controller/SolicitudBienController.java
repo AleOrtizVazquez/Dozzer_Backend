@@ -82,6 +82,16 @@ public class SolicitudBienController {
         respuesta.put("fechaSolicitud", solicitud.getFechaSolicitud());
         respuesta.put("fechaResolucion", solicitud.getFechaResolucion());
         respuesta.put("idSede", solicitud.getIdSede());
+        respuesta.put("motivoRevocacion", solicitud.getMotivoRevocacion());
+        respuesta.put("fechaRevocacion", solicitud.getFechaRevocacion());
+        if (solicitud.getIdUsuarioRevoco() != null) {
+            usuarioRepository.findById(solicitud.getIdUsuarioRevoco())
+                    .ifPresent(u -> respuesta.put("nombreRevoco", nombreUsuario(u)));
+        }
+        String estado = solicitud.getEstado() == null ? "" : solicitud.getEstado().toUpperCase();
+        respuesta.put("revocable", "RECHAZADA".equals(estado)
+                || ("APROBADA".equals(estado)
+                    && (!"MODIFICACION".equals(solicitud.getTipoOperacion()) || solicitud.getDatosAnteriores() != null)));
 
         return respuesta;
     }
@@ -189,6 +199,15 @@ public class SolicitudBienController {
         String motivo = datos != null && datos.get("motivoResolucion") != null
                 ? datos.get("motivoResolucion").toString() : null;
         return workflowService.resolver(idSolicitud, false, motivo);
+    }
+
+    // Revocar una autorización (solo ADMIN): deshace el cambio y la regresa a pendientes
+    @PostMapping("/{idSolicitud}/revocar")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String,Object> revocar(@PathVariable Long idSolicitud,
+                                      @RequestBody Map<String,Object> datos) {
+        String motivo = datos != null && datos.get("motivo") != null ? datos.get("motivo").toString() : null;
+        return workflowService.revocar(idSolicitud, motivo);
     }
 
     // Consultar una solicitud: administrador o propietario

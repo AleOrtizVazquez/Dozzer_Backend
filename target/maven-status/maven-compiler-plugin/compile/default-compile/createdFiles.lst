@@ -30,6 +30,7 @@ com\dozzer\service\impl\UsuarioAdministracionService.class
 com\dozzer\entity\Persona.class
 com\dozzer\repository\SolicitudBienRepository.class
 com\dozzer\entity\ConfiguracionAutorizacion.class
+com\dozzer\controller\RecuperacionPasswordController.class
 com\dozzer\service\impl\PermisoServiceImpl.class
 com\dozzer\entity\Ubicacion.class
 com\dozzer\entity\Bien.class
@@ -57,6 +58,7 @@ com\dozzer\repository\SubcategoriaRepository.class
 com\dozzer\security\JwtService.class
 com\dozzer\repository\TipoUbicacionRepository.class
 com\dozzer\entity\Sede.class
+com\dozzer\controller\DocumentoController.class
 com\dozzer\controller\ApiExceptionHandler.class
 com\dozzer\entity\Rol.class
 com\dozzer\repository\DepartamentoRepository.class

@@ -22,4 +22,7 @@ public interface SolicitudBienRepository extends JpaRepository<SolicitudBien, Lo
     // Consultar solicitudes pendientes de una sede
     List<SolicitudBien> findByEstadoAndIdSedeOrderByFechaSolicitudDesc(
             String estado, Long idSede);
+
+    // ¿Hay otras solicitudes ligadas al mismo bien?
+    boolean existsByBien_IdBienAndIdSolicitudNot(Long idBien, Long idSolicitud);
 }

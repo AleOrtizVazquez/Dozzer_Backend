@@ -73,4 +73,48 @@ public class SolicitudBienWorkflowService {
                 "estado", solicitud.getEstado(),
                 "message", aprobar ? "Solicitud aprobada y aplicada al inventario" : "Solicitud rechazada");
     }
+
+    // Revoca una autorización (aprobada o rechazada): deshace lo aplicado y la regresa a PENDIENTE
+    public Map<String,Object> revocar(Long idSolicitud, String motivo) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sesión no válida");
+        Usuario admin = usuarioRepository.findByCorreoIgnoreCase(auth.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
+        boolean esAdmin = admin.getRoles().stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getNombre()));
+        if (!esAdmin) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el administrador puede revocar autorizaciones");
+
+        if (motivo == null || motivo.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica el motivo de la revocación");
+        }
+        if (motivo.length() > 500) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El motivo no puede superar 500 caracteres");
+        }
+
+        SolicitudBien solicitud = solicitudRepository.findById(idSolicitud)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solicitud no encontrada"));
+        String estado = solicitud.getEstado() == null ? "" : solicitud.getEstado().toUpperCase();
+        if ("PENDIENTE".equals(estado)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La solicitud ya está pendiente");
+        }
+        if (!"APROBADA".equals(estado) && !"RECHAZADA".equals(estado)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Solo se pueden revocar solicitudes aprobadas o rechazadas");
+        }
+
+        if ("APROBADA".equals(estado)) {
+            bienService.revertirSolicitudAprobada(solicitud);
+        }
+
+        solicitud.setEstado("PENDIENTE");
+        solicitud.setMotivoResolucion(null);
+        solicitud.setUsuarioRevisor(null);
+        solicitud.setFechaResolucion(null);
+        solicitud.setMotivoRevocacion(motivo.trim());
+        solicitud.setFechaRevocacion(LocalDateTime.now());
+        solicitud.setIdUsuarioRevoco(admin.getIdUsuario());
+        solicitudRepository.save(solicitud);
+
+        return Map.of("success", true, "idSolicitud", idSolicitud, "estado", "PENDIENTE",
+                "estadoAnterior", estado,
+                "message", "Autorización revocada; la solicitud regresó a pendientes");
+    }
 }

@@ -60,6 +60,7 @@ public class JwtFilter extends OncePerRequestFilter {
   String ruta = req.getRequestURI();
   return "OPTIONS".equalsIgnoreCase(req.getMethod())
           || ruta.equals("/api/auth/login")
+          || ruta.equals("/api/auth/recuperar-password")
           || ruta.equals("/api/auth/cambiar-password");
  }
 }

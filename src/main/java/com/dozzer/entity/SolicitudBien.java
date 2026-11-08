@@ -61,6 +61,21 @@ public class SolicitudBien {
     @Column(name = "id_sede", nullable = false)
     private Long idSede;
 
+    // Copia del bien antes de aplicar una MODIFICACION aprobada (permite revocarla)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "datos_anteriores", columnDefinition = "jsonb")
+    private Map<String,Object> datosAnteriores;
+
+    // Última revocación de la autorización (auditoría)
+    @Column(name = "motivo_revocacion", length = 500)
+    private String motivoRevocacion;
+
+    @Column(name = "fecha_revocacion")
+    private LocalDateTime fechaRevocacion;
+
+    @Column(name = "id_usuario_revoco")
+    private Long idUsuarioRevoco;
+
     @PrePersist
     protected void antesDeGuardar() {
         if (fechaSolicitud == null) {
