@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+      http://www.liquibase.org/xml/ns/dbchangelog
+      https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="002-improvements" author="dozzer">
+
+        <!-- Relaciones de movimientos -->
+        <addForeignKeyConstraint
+                baseTableName="historial_movimientos"
+                baseColumnNames="id_persona_origen"
+                referencedTableName="cat_personas"
+                referencedColumnNames="id_persona"
+                constraintName="fk_mov_persona_origen"/>
+
+        <addForeignKeyConstraint
+                baseTableName="historial_movimientos"
+                baseColumnNames="id_persona_destino"
+                referencedTableName="cat_personas"
+                referencedColumnNames="id_persona"
+                constraintName="fk_mov_persona_destino"/>
+
+        <addForeignKeyConstraint
+                baseTableName="historial_movimientos"
+                baseColumnNames="id_ubicacion_origen"
+                referencedTableName="cat_ubicaciones"
+                referencedColumnNames="id_ubicacion"
+                constraintName="fk_mov_ubicacion_origen"/>
+
+        <addForeignKeyConstraint
+                baseTableName="historial_movimientos"
+                baseColumnNames="id_ubicacion_destino"
+                referencedTableName="cat_ubicaciones"
+                referencedColumnNames="id_ubicacion"
+                constraintName="fk_mov_ubicacion_destino"/>
+
+        <!-- Auditoría de bienes -->
+        <addColumn tableName="bienes">
+            <column name="fecha_actualizacion" type="TIMESTAMP"/>
+            <column name="id_usuario_registro" type="BIGINT"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+                baseTableName="bienes"
+                baseColumnNames="id_usuario_registro"
+                referencedTableName="usuarios"
+                referencedColumnNames="id_usuario"
+                constraintName="fk_bien_usuario_registro"/>
+
+        <!-- Información de documentos -->
+        <addColumn tableName="documentos_archivos">
+            <column name="nombre_original" type="VARCHAR(255)"/>
+            <column name="extension" type="VARCHAR(15)"/>
+            <column name="activo" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <!-- Índices -->
+        <createIndex tableName="bienes" indexName="idx_bienes_clave">
+            <column name="clave"/>
+        </createIndex>
+
+        <createIndex tableName="bienes" indexName="idx_bienes_clasificacion">
+            <column name="id_clasificacion"/>
+        </createIndex>
+
+        <createIndex tableName="bienes" indexName="idx_bienes_ubicacion">
+            <column name="id_ubicacion"/>
+        </createIndex>
+
+        <createIndex tableName="documentos_archivos" indexName="idx_documentos_bien">
+            <column name="id_bien"/>
+        </createIndex>
+
+        <createIndex tableName="historial_movimientos_detalle" indexName="idx_detalle_bien">
+            <column name="id_bien"/>
+        </createIndex>
+
+    </changeSet>
+</databaseChangeLog>

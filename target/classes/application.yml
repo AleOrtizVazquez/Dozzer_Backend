@@ -1,0 +1,37 @@
+  server:
+    port: 8080
+
+  spring:
+    application:
+      name: dozzer-backend
+
+    datasource:
+      url: ${DB_URL:jdbc:postgresql://localhost:5432/dozzer}
+      username: ${DB_USERNAME:postgres}
+      password: ${DB_PASSWORD:postgres}
+
+    jpa:
+      hibernate:
+        ddl-auto: validate
+      open-in-view: false
+      properties:
+        hibernate:
+          format_sql: true
+
+    liquibase:
+      change-log: classpath:db/changelog/db.changelog-master.xml
+
+    jackson:
+      default-property-inclusion: non_null
+
+  app:
+    cors:
+      allowed-origin: ${CORS_ORIGIN:http://localhost:4200,http://192.168.1.72:4200}
+
+    admin:
+      email: ${DOZZER_ADMIN_EMAIL:admin@dozzer.com}
+      password: ${DOZZER_ADMIN_PASSWORD:AdminDOZZER2026!}
+
+    jwt:
+      secret: ${JWT_SECRET:DOZZER_LOCAL_ONLY_SECRET_CHANGE_BEFORE_PRODUCTION_2026_0123456789}
+      expiration-minutes: 480

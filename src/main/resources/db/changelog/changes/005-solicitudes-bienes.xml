@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="005-solicitudes-bienes" author="dozzer">
+
+        <createTable tableName="solicitudes_bienes">
+
+            <column name="id_solicitud" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="tipo_operacion" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="id_bien" type="BIGINT"/>
+
+            <column name="datos_propuestos" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="estado" type="VARCHAR(20)" defaultValue="PENDIENTE">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="motivo_solicitud" type="VARCHAR(500)"/>
+
+            <column name="motivo_resolucion" type="VARCHAR(500)"/>
+
+            <column name="id_usuario_solicitante" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="id_usuario_revisor" type="BIGINT"/>
+
+            <column name="fecha_solicitud" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="fecha_resolucion" type="TIMESTAMP"/>
+
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="solicitudes_bienes"
+                baseColumnNames="id_usuario_solicitante"
+                referencedTableName="usuarios"
+                referencedColumnNames="id_usuario"
+                constraintName="fk_solicitud_solicitante"/>
+
+        <addForeignKeyConstraint
+                baseTableName="solicitudes_bienes"
+                baseColumnNames="id_usuario_revisor"
+                referencedTableName="usuarios"
+                referencedColumnNames="id_usuario"
+                constraintName="fk_solicitud_revisor"/>
+
+
+        <addForeignKeyConstraint
+                baseTableName="solicitudes_bienes"
+                baseColumnNames="id_bien"
+                referencedTableName="bienes"
+                referencedColumnNames="id_bien"
+                constraintName="fk_solicitud_bien"/>
+
+
+    </changeSet>
+</databaseChangeLog>

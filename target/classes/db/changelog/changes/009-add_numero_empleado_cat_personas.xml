@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="009-add-numero-empleado-cat-personas"
+               author="dozzer">
+
+        <addColumn tableName="cat_personas">
+            <column name="numero_empleado" type="VARCHAR(20)"/>
+        </addColumn>
+
+    </changeSet>
+
+</databaseChangeLog>

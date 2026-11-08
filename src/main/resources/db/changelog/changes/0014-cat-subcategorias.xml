@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <changeSet id="create-cat-subcategorias" author="dozzer">
+
+        <createTable tableName="cat_subcategorias" schemaName="public">
+
+            <column name="id_subcategoria" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"
+                             primaryKeyName="pk_cat_subcategorias"
+                             nullable="false"/>
+            </column>
+
+            <column name="id_clasificacion" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="nombre_subcategoria_acta" type="VARCHAR(150)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="conteo_sede_celaya" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="conteo_total_empresa" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableSchemaName="public"
+                baseTableName="cat_subcategorias"
+                baseColumnNames="id_clasificacion"
+                constraintName="fk_subcategorias_clasificaciones"
+                referencedTableSchemaName="public"
+                referencedTableName="cat_clasificaciones"
+                referencedColumnNames="id_clasificacion"/>
+
+    </changeSet>
+
+</databaseChangeLog>
