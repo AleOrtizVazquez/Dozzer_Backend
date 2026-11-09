@@ -22,6 +22,7 @@ public class SolicitudBienWorkflowService {
     @Autowired private SolicitudBienRepository solicitudRepository;
     @Autowired private UsuarioRepository usuarioRepository;
     @Autowired private BienServiceImpl bienService;
+    @Autowired private DocumentoFormatoService documentoFormatoService;
 
     public Map<String,Object> resolver(Long idSolicitud, boolean aprobar, String motivo) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -69,9 +70,20 @@ public class SolicitudBienWorkflowService {
         solicitud.setFechaResolucion(LocalDateTime.now());
         solicitudRepository.save(solicitud);
 
-        return Map.of("success", true, "idSolicitud", idSolicitud,
-                "estado", solicitud.getEstado(),
-                "message", aprobar ? "Solicitud aprobada y aplicada al inventario" : "Solicitud rechazada");
+        Map<String,Object> respuesta = new java.util.HashMap<>();
+        respuesta.put("success", true);
+        respuesta.put("idSolicitud", idSolicitud);
+        respuesta.put("estado", solicitud.getEstado());
+        respuesta.put("message", aprobar ? "Solicitud aprobada y aplicada al inventario" : "Solicitud rechazada");
+
+        // Formato de alta/baja registrado automáticamente al autorizar
+        String tipo = solicitud.getTipoOperacion();
+        if (aprobar && ("ALTA".equals(tipo) || "BAJA".equals(tipo)) && solicitud.getBien() != null) {
+            var doc = documentoFormatoService.registrar(tipo, solicitud.getBien(), solicitud,
+                    solicitud.getUsuarioSolicitante(), revisor, null);
+            respuesta.put("idDocumento", doc.getIdDocumento());
+        }
+        return respuesta;
     }
 
     // Revoca una autorización (aprobada o rechazada): deshace lo aplicado y la regresa a PENDIENTE
@@ -101,6 +113,8 @@ public class SolicitudBienWorkflowService {
         }
 
         if ("APROBADA".equals(estado)) {
+            // El formato que se generó queda anulado (se conserva como registro)
+            documentoFormatoService.anularPorSolicitud(idSolicitud);
             bienService.revertirSolicitudAprobada(solicitud);
         }
 

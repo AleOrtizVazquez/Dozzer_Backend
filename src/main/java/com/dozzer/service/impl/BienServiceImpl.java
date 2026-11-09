@@ -38,6 +38,8 @@ public class BienServiceImpl implements BienService {
     private SubcategoriaRepository subcategoriaRepository;
     @Autowired
     private SolicitudBienRepository solicitudBienRepository;
+    @Autowired
+    private DocumentoFormatoService documentoFormatoService;
 
     @Override
     @Transactional(readOnly = true)
@@ -74,7 +76,13 @@ public class BienServiceImpl implements BienService {
         Bien bien = new Bien();
         asignarDatos(bien,datos);
         bien.setUsuarioRegistro(usuario);
-        return convertirAMap(bienRepository.save(bien));
+        Bien guardado = bienRepository.saveAndFlush(bien);
+        Map<String,Object> respuesta = convertirAMap(bienRepository.findById(guardado.getIdBien()).orElse(guardado));
+        // Formato de alta registrado automáticamente
+        Documento doc = documentoFormatoService.registrar("ALTA", guardado, null, usuario, usuario,
+                "Alta registrada directamente por el administrador.");
+        respuesta.put("idDocumento", doc.getIdDocumento());
+        return respuesta;
     }
 
     @Override
@@ -106,10 +114,14 @@ public class BienServiceImpl implements BienService {
         }
         bien.setActivo(false);
         bienRepository.save(bien);
+        // Formato de baja registrado automáticamente
+        Documento doc = documentoFormatoService.registrar("BAJA", bien, null, usuario, usuario,
+                "Baja registrada directamente por el administrador.");
         Map<String,Object> respuesta = new HashMap<>();
         respuesta.put("success",true);
         respuesta.put("message","Bien eliminado correctamente");
         respuesta.put("idBien",idBien);
+        respuesta.put("idDocumento", doc.getIdDocumento());
         return respuesta;
     }
 

@@ -24,39 +24,9 @@
     jackson:
       default-property-inclusion: non_null
 
-    # ==========================================================
-    # CORREO QUE ENVÍA LOS FORMATOS DE ALTA/BAJA
-    # Para cambiar la cuenta después, edita estos valores (o define las variables
-    # de entorno MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM).
-    #   Gmail:      host smtp.gmail.com      puerto 587
-    #   Office 365: host smtp.office365.com  puerto 587
-    # IMPORTANTE (Gmail): "password" NO es la contraseña normal de la cuenta, es una
-    # "Contraseña de aplicación" de 16 letras (Cuenta de Google > Seguridad >
-    # Verificación en dos pasos > Contraseñas de aplicaciones).
-    # Mientras "password" esté vacío, el envío aparece como "no configurado".
-    # ==========================================================
-    mail:
-      host: ${MAIL_HOST:smtp.gmail.com}
-      port: ${MAIL_PORT:587}
-      username: ${MAIL_USERNAME:aleortizvazquez192@gmail.com}
-      password: ${MAIL_PASSWORD:Ereselkerneldemilinux19.}
-      properties:
-        mail:
-          smtp:
-            auth: true
-            starttls:
-              enable: true
-            connectiontimeout: 10000
-            timeout: 15000
-            writetimeout: 15000
-
   app:
     cors:
       allowed-origin: ${CORS_ORIGIN:http://localhost:4200,http://192.168.1.72:4200}
-
-    mail:
-      # Remitente que verán los destinatarios (si se deja vacío se usa MAIL_USERNAME)
-      from: ${MAIL_FROM:DOZZER Inventarios <aleortizvazquez192@gmail.com>}
 
     admin:
       email: ${DOZZER_ADMIN_EMAIL:admin@dozzer.com}
