@@ -553,6 +553,7 @@ public class BienServiceImpl implements BienService {
         resultado.put("id_bien",bien.getIdBien());
         resultado.put("clave",bien.getClave());
         resultado.put("codigo_qr",bien.getCodigoQr());
+        resultado.put("tiene_foto",bien.getFotoKey() != null);
         resultado.put("id_bien_padre",bien.getBienPadre() != null ? bien.getBienPadre().getIdBien() : null);
         resultado.put("id_clasificacion",bien.getClasificacion() != null ? bien.getClasificacion().getIdClasificacion() : null);
         resultado.put("clasificacion",bien.getClasificacion() != null ? bien.getClasificacion().getNombre() : null);

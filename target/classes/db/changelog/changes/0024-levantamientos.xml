@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Inventario anual (levantamiento físico por sede) -->
+    <changeSet id="0024-levantamientos" author="dozzer">
+        <createTable tableName="levantamientos">
+            <column name="id_levantamiento" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="id_sede" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="anio" type="INT"><constraints nullable="false"/></column>
+            <column name="estado" type="VARCHAR(20)" defaultValue="EN_CURSO"><constraints nullable="false"/></column>
+            <column name="ciudad" type="VARCHAR(150)"/>
+            <column name="direccion" type="VARCHAR(300)"/>
+            <column name="fecha_inicio" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="fecha_cierre" type="TIMESTAMP"/>
+            <column name="participantes" type="JSONB"/>
+            <column name="pregunta" type="JSONB"/>
+            <column name="id_usuario_capturista" type="BIGINT"/>
+            <column name="id_usuario_creo" type="BIGINT"/>
+            <column name="id_documento_inicio" type="BIGINT"/>
+            <column name="id_documento_cierre" type="BIGINT"/>
+        </createTable>
+        <createIndex tableName="levantamientos" indexName="ix_levantamientos_sede"><column name="id_sede"/></createIndex>
+
+        <createTable tableName="levantamiento_registros">
+            <column name="id_registro" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="id_levantamiento" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="id_bien" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="respuesta" type="VARCHAR(60)"/>
+            <column name="id_ubicacion_encontrada" type="BIGINT"/>
+            <column name="fuera_de_lugar" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="foto_tomada" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="id_usuario" type="BIGINT"/>
+            <column name="fecha" type="TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="levantamiento_registros" columnNames="id_levantamiento, id_bien"
+                             constraintName="uk_registro_levantamiento_bien"/>
+
+        <!-- Foto del bien: se toma una sola vez (ruta del archivo en R2 o en la carpeta local) -->
+        <addColumn tableName="bienes">
+            <column name="foto_key" type="VARCHAR(300)"/>
+            <column name="foto_fecha" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

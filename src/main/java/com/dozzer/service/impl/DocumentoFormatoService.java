@@ -100,6 +100,25 @@ public class DocumentoFormatoService {
         return documentoRepository.save(doc);
     }
 
+    // Actas del inventario anual (inicio y cierre): datos ya armados por el levantamiento
+    public Documento registrarActa(String tipo, Long idSede, Map<String, Object> datos, Usuario usuario, int anio) {
+        Documento doc = new Documento();
+        doc.setTipo(tipo);
+        doc.setEstado("VIGENTE");
+        doc.setIdSede(idSede);
+        doc.setIdUsuarioSolicitante(usuario != null ? usuario.getIdUsuario() : null);
+        doc.setIdUsuarioAutorizo(usuario != null ? usuario.getIdUsuario() : null);
+        doc.setDatos(datos);
+        documentoRepository.saveAndFlush(doc);
+        String folio = ("ACTA_INICIO".equals(tipo) ? "AI" : "AC") + "-" + String.valueOf(anio).substring(2)
+                + "-" + String.format("%04d", doc.getIdDocumento());
+        doc.setFolio(folio);
+        Map<String, Object> conFolio = new LinkedHashMap<>(datos);
+        conFolio.put("folio", folio);
+        doc.setDatos(conFolio);
+        return documentoRepository.save(doc);
+    }
+
     // Al revocar una autorización, su documento queda anulado (no se borra)
     public void anularPorSolicitud(Long idSolicitud) {
         documentoRepository.findByIdSolicitud(idSolicitud).forEach(doc -> {
@@ -113,7 +132,8 @@ public class DocumentoFormatoService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listar(String tipo, Long idSolicitud, Long idBien) {
         return visibles().stream()
-                .filter(doc -> tipo == null || tipo.isBlank() || tipo.equalsIgnoreCase(doc.getTipo()))
+                .filter(doc -> tipo == null || tipo.isBlank() || tipo.equalsIgnoreCase(doc.getTipo())
+                        || ("ACTAS".equalsIgnoreCase(tipo) && doc.getTipo() != null && doc.getTipo().startsWith("ACTA")))
                 .filter(doc -> idSolicitud == null || idSolicitud.equals(doc.getIdSolicitud()))
                 .filter(doc -> idBien == null || idBien.equals(doc.getIdBien()))
                 .map(this::resumen)
@@ -126,6 +146,7 @@ public class DocumentoFormatoService {
         List<Documento> docs = visibles();
         r.put("ALTA", docs.stream().filter(d -> "ALTA".equals(d.getTipo())).count());
         r.put("BAJA", docs.stream().filter(d -> "BAJA".equals(d.getTipo())).count());
+        r.put("ACTAS", docs.stream().filter(d -> d.getTipo() != null && d.getTipo().startsWith("ACTA")).count());
         return r;
     }
 
@@ -182,6 +203,10 @@ public class DocumentoFormatoService {
         r.put("sede", d.get("sede"));
         r.put("solicito", d.get("solicito"));
         r.put("autorizo", d.get("autorizo"));
+        if (d.get("titulo") != null) {
+            r.put("clave", d.get("sede"));
+            r.put("descripcion", d.get("titulo"));
+        }
         Object filas = d.get("filas");
         if (filas instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map<?, ?> f) {
             r.put("clave", f.get("inventario"));

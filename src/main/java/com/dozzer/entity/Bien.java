@@ -101,6 +101,13 @@ public class Bien {
     @Column(name = "codigo_qr", nullable = false, unique = true, length = 36, updatable = false)
     private String codigoQr;
 
+    // Foto del bien (se toma una sola vez en el inventario anual)
+    @Column(name = "foto_key", length = 300)
+    private String fotoKey;
+
+    @Column(name = "foto_fecha")
+    private LocalDateTime fotoFecha;
+
     @PrePersist
     protected void antesDeGuardar() {
 

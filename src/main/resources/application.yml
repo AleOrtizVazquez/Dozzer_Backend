@@ -24,9 +24,30 @@
     jackson:
       default-property-inclusion: non_null
 
+    # Fotos del inventario anual (se comprimen en el celular, ~250 KB)
+    servlet:
+      multipart:
+        max-file-size: 8MB
+        max-request-size: 10MB
+
   app:
     cors:
       allowed-origin: ${CORS_ORIGIN:http://localhost:4200,http://192.168.1.72:4200}
+
+    # ==========================================================
+    # FOTOS DE LOS BIENES (Inventario anual)
+    # Con los 4 datos de Cloudflare R2 llenos, las fotos se guardan en R2.
+    # Mientras estén vacíos, se guardan en la carpeta local "carpeta-local".
+    # R2: Cloudflare > R2 > Crear bucket; luego "Manage R2 API Tokens" > Create API token
+    #     (permiso Object Read & Write) y copiar Account ID, Access Key ID y Secret Access Key.
+    # ==========================================================
+    r2:
+      account-id: ${R2_ACCOUNT_ID:}
+      access-key: ${R2_ACCESS_KEY:}
+      secret-key: ${R2_SECRET_KEY:}
+      bucket: ${R2_BUCKET:dozzer-fotos}
+    fotos:
+      carpeta-local: ${FOTOS_DIR:fotos-bienes}
 
     admin:
       email: ${DOZZER_ADMIN_EMAIL:admin@dozzer.com}

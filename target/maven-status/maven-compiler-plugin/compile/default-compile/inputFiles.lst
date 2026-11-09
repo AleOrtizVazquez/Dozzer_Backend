@@ -6,6 +6,7 @@ C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backen
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\controller\CatalogoController.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\controller\ConfiguracionAutorizacionController.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\controller\DocumentoController.java
+C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\controller\LevantamientoController.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\controller\PermisoController.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\controller\RecuperacionPasswordController.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\controller\RolController.java
@@ -19,6 +20,8 @@ C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backen
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\Departamento.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\Documento.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\Entidad.java
+C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\Levantamiento.java
+C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\LevantamientoRegistro.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\Marca.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\Permiso.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\entity\Persona.java
@@ -37,6 +40,8 @@ C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backen
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\DepartamentoRepository.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\DocumentoRepository.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\EntidadRepository.java
+C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\LevantamientoRegistroRepository.java
+C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\LevantamientoRepository.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\MarcaRepository.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\PermisoRepository.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\repository\PersonaRepository.java
@@ -59,6 +64,8 @@ C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backen
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\CatalogoServiceImpl.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\ConfiguracionAutorizacionServiceImpl.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\DocumentoFormatoService.java
+C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\FotoStorageService.java
+C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\LevantamientoService.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\PermisoServiceImpl.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\RolServiceImpl.java
 C:\Users\alortiz\Documents\CAOS\Proyecto1.0\Inventarios\new\DOZZER\dozzer-backend\src\main\java\com\dozzer\service\impl\SolicitudBienServiceImpl.java

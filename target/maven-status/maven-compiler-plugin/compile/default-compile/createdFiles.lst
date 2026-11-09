@@ -1,5 +1,6 @@
 com\dozzer\service\impl\SolicitudBienWorkflowService.class
 com\dozzer\repository\UbicacionRepository.class
+com\dozzer\repository\LevantamientoRepository.class
 com\dozzer\entity\PuestoDepartamento.class
 com\dozzer\controller\BienController.class
 com\dozzer\service\BienService.class
@@ -13,6 +14,7 @@ com\dozzer\entity\Color.class
 com\dozzer\service\SolicitudBienService.class
 com\dozzer\entity\Persona.class
 com\dozzer\entity\ConfiguracionAutorizacion.class
+com\dozzer\repository\LevantamientoRegistroRepository.class
 com\dozzer\entity\Ubicacion.class
 com\dozzer\entity\Bien.class
 com\dozzer\service\PermisoService.class
@@ -34,19 +36,23 @@ com\dozzer\entity\Usuario.class
 com\dozzer\repository\UsuarioRepository.class
 com\dozzer\controller\PermisoController.class
 com\dozzer\repository\BienRepository.class
+com\dozzer\controller\LevantamientoController.class
 com\dozzer\service\RolService.class
+com\dozzer\entity\Levantamiento.class
 com\dozzer\security\UsuarioDetailsService.class
 com\dozzer\controller\AuthController.class
 com\dozzer\service\impl\ConfiguracionAutorizacionServiceImpl.class
 com\dozzer\entity\Departamento.class
 com\dozzer\security\SecurityConfig.class
 com\dozzer\repository\PersonaRepository.class
+com\dozzer\service\impl\FotoStorageService.class
 com\dozzer\controller\ConfiguracionAutorizacionController.class
 com\dozzer\controller\CatalogoController.class
 com\dozzer\repository\RolRepository.class
 com\dozzer\service\CatalogoService.class
 com\dozzer\controller\AuthenticationConfigurationHolder.class
 com\dozzer\service\impl\SolicitudBienServiceImpl.class
+com\dozzer\service\impl\LevantamientoService.class
 com\dozzer\service\impl\UsuarioAdministracionService.class
 com\dozzer\repository\SolicitudBienRepository.class
 com\dozzer\service\impl\DocumentoFormatoService$Alcance.class
@@ -57,6 +63,7 @@ com\dozzer\repository\ConfiguracionAutorizacionRepository.class
 com\dozzer\entity\Entidad.class
 com\dozzer\DozzerApplication.class
 com\dozzer\repository\PuestoDepartamentoRepository.class
+com\dozzer\entity\LevantamientoRegistro.class
 com\dozzer\service\impl\BienServiceImpl.class
 com\dozzer\repository\MarcaRepository.class
 com\dozzer\entity\TipoUbicacion.class
