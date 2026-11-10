@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Notificaciones al celular (Web Push): un registro por navegador/celular de cada usuario,
+         y las llaves VAPID con las que el servidor firma los avisos (se generan solas la primera vez) -->
+    <changeSet id="0027-notificaciones-push" author="dozzer">
+        <createTable tableName="push_suscripciones">
+            <column name="id_suscripcion" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="id_usuario" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="endpoint" type="VARCHAR(1000)"><constraints nullable="false" unique="true" uniqueConstraintName="uk_push_endpoint"/></column>
+            <column name="p256dh" type="VARCHAR(200)"><constraints nullable="false"/></column>
+            <column name="auth" type="VARCHAR(100)"><constraints nullable="false"/></column>
+            <column name="agente" type="VARCHAR(300)"/>
+            <column name="fecha" type="TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <createIndex tableName="push_suscripciones" indexName="ix_push_usuario"><column name="id_usuario"/></createIndex>
+
+        <createTable tableName="push_config">
+            <column name="id" type="INT"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="clave_publica" type="VARCHAR(200)"><constraints nullable="false"/></column>
+            <column name="clave_privada" type="VARCHAR(200)"><constraints nullable="false"/></column>
+        </createTable>
+    </changeSet>
+
+    <!-- En Supabase: nadie fuera del servidor puede leer estas tablas (la llave privada vive aquí) -->
+    <changeSet id="0027-notificaciones-push-rls" author="dozzer" dbms="postgresql">
+        <sql splitStatements="false">
+            ALTER TABLE push_suscripciones ENABLE ROW LEVEL SECURITY;
+            ALTER TABLE push_config ENABLE ROW LEVEL SECURITY;
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                    EXECUTE 'REVOKE ALL ON push_suscripciones, push_config FROM anon';
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    EXECUTE 'REVOKE ALL ON push_suscripciones, push_config FROM authenticated';
+                END IF;
+            END $$;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

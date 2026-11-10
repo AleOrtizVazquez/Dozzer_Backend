@@ -43,6 +43,9 @@ public class BienServiceImpl implements BienService {
     @Autowired
     private DocumentoFormatoService documentoFormatoService;
 
+    @Autowired
+    private NotificacionService notificacionService;
+
     @Override
     @Transactional(readOnly = true)
     public List<Map<String,Object>> listarBienes() {
@@ -339,6 +342,8 @@ public class BienServiceImpl implements BienService {
         solicitud.setUsuarioSolicitante(usuario);
         solicitud.setIdSede(idSede);
         solicitudBienRepository.save(solicitud);
+        // Aviso al celular de quienes pueden autorizarla
+        notificacionService.nuevaSolicitud(solicitud);
 
         Map<String,Object> respuesta = new LinkedHashMap<>();
         respuesta.put("success", true);

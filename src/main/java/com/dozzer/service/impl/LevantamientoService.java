@@ -32,6 +32,14 @@ public class LevantamientoService {
     @Autowired private DocumentoFormatoService documentoFormatoService;
     @Autowired private FotoStorageService fotoStorage;
     @Autowired private DocumentoRepository documentoRepository;
+    @Autowired private PersonaRepository personaRepository;
+    @Autowired private ClasificacionRepository clasificacionRepository;
+    @Autowired private MarcaRepository marcaRepository;
+
+    // Estatus de cada bien dentro del levantamiento
+    public static final String PENDIENTE = "PENDIENTE";
+    public static final String REVISADO = "REVISADO";
+    public static final String NO_ENCONTRADO = "NO_ENCONTRADO";
 
     // ===================== Consulta =====================
 
@@ -66,32 +74,68 @@ public class LevantamientoService {
         Map<Long, String> areas = new HashMap<>();
         ubicacionRepository.findAllById(idsEncontradas).forEach(x -> areas.put(x.getIdUbicacion(), x.getNombreArea()));
         List<Map<String, Object>> lista = new ArrayList<>();
-        for (Bien b : bienesDeSede(l.getIdSede())) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id_bien", b.getIdBien());
-            m.put("clave", b.getClave());
-            m.put("articulo", b.getArticulo());
-            m.put("marca", b.getMarca() != null ? b.getMarca().getNombreMarca() : null);
-            m.put("modelo", b.getModelo());
-            m.put("numero_serie", b.getNumeroSerie());
-            m.put("clasificacion", b.getClasificacion() != null ? b.getClasificacion().getNombre() : null);
-            m.put("id_ubicacion", b.getUbicacion() != null ? b.getUbicacion().getIdUbicacion() : null);
-            m.put("ubicacion", b.getUbicacion() != null ? b.getUbicacion().getNombreArea() : null);
-            m.put("responsable", b.getResponsableArea() != null ? b.getResponsableArea().getNombreCompleto() : null);
-            m.put("codigo_qr", b.getCodigoQr());
-            m.put("tiene_foto", b.getFotoKey() != null);
-            m.put("foto_mini", fotoStorage.urlMini(b.getFotoKey()));
-            m.put("foto_url", fotoStorage.urlGrande(b.getFotoKey()));
-            LevantamientoRegistro r = registros.get(b.getIdBien());
-            if (r != null) {
-                m.put("respuesta", r.getRespuesta());
-                m.put("fuera_de_lugar", Boolean.TRUE.equals(r.getFueraDeLugar()));
-                m.put("ubicacion_encontrada", areas.get(r.getIdUbicacionEncontrada()));
+        for (Bien b : bienesDeSede(l.getIdSede())) lista.add(itemBien(b, registros.get(b.getIdBien()), areas));
+        return lista;
+    }
+
+    // Un bien como lo usan la captura y la lista de avance
+    private Map<String, Object> itemBien(Bien b, LevantamientoRegistro r, Map<Long, String> areas) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id_bien", b.getIdBien());
+        m.put("clave", b.getClave());
+        m.put("articulo", b.getArticulo());
+        m.put("marca", b.getMarca() != null ? b.getMarca().getNombreMarca() : null);
+        m.put("modelo", b.getModelo());
+        m.put("numero_serie", b.getNumeroSerie());
+        m.put("clasificacion", b.getClasificacion() != null ? b.getClasificacion().getNombre() : null);
+        m.put("id_ubicacion", b.getUbicacion() != null ? b.getUbicacion().getIdUbicacion() : null);
+        m.put("ubicacion", b.getUbicacion() != null ? b.getUbicacion().getNombreArea() : null);
+        m.put("sede", b.getUbicacion() != null && b.getUbicacion().getSede() != null ? b.getUbicacion().getSede().getNombreSede() : null);
+        m.put("responsable", b.getResponsableArea() != null ? b.getResponsableArea().getNombreCompleto() : null);
+        // "Persona" del levantamiento = usuario directo del bien (de quien es el resguardo)
+        m.put("id_persona", b.getUsuarioDirecto() != null ? b.getUsuarioDirecto().getIdPersona() : null);
+        m.put("persona", b.getUsuarioDirecto() != null ? b.getUsuarioDirecto().getNombreCompleto() : null);
+        m.put("codigo_qr", b.getCodigoQr());
+        m.put("tiene_foto", b.getFotoKey() != null);
+        m.put("foto_mini", fotoStorage.urlMini(b.getFotoKey()));
+        m.put("foto_url", fotoStorage.urlGrande(b.getFotoKey()));
+        if (r != null) {
+            boolean pendiente = PENDIENTE.equals(r.getEstatus());
+            if (!pendiente) {
+                m.put("estatus", r.getEstatus());
                 m.put("fecha_registro", r.getFecha());
             }
-            lista.add(m);
+            m.put("origen", r.getOrigen());
+            m.put("sede_anterior", r.getSedeAnterior());
+            if (REVISADO.equals(r.getEstatus())) {
+                m.put("respuesta", r.getRespuesta());
+                m.put("fuera_de_lugar", Boolean.TRUE.equals(r.getFueraDeLugar()));
+                m.put("ubicacion_encontrada", areas == null ? null : areas.get(r.getIdUbicacionEncontrada()));
+            }
         }
-        return lista;
+        return m;
+    }
+
+    // Areas, personas y catalogos de la sede (para "bien nuevo" y "traer a esta sede")
+    @Transactional(readOnly = true)
+    public Map<String, Object> opciones(Long id) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarVer(u, l);
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("areas", ubicacionRepository.findBySede_IdSede(l.getIdSede()).stream()
+                .filter(x -> !Boolean.FALSE.equals(x.getEstatus()))
+                .sorted(Comparator.comparing(x -> texto(x.getNombreArea()), String.CASE_INSENSITIVE_ORDER))
+                .map(x -> Map.<String, Object>of("id", x.getIdUbicacion(), "nombre", texto(x.getNombreArea()))).toList());
+        r.put("personas", personaRepository.findBySede_IdSedeAndEstatusTrue(l.getIdSede()).stream()
+                .sorted(Comparator.comparing(x -> texto(x.getNombreCompleto()), String.CASE_INSENSITIVE_ORDER))
+                .map(x -> Map.<String, Object>of("id", x.getIdPersona(), "nombre", texto(x.getNombreCompleto()),
+                        "numero", texto(x.getNumeroEmpleado()))).toList());
+        r.put("clasificaciones", clasificacionRepository.findAllByOrderByNombreAsc().stream()
+                .map(x -> Map.<String, Object>of("id", x.getIdClasificacion(), "nombre", texto(x.getNombre()))).toList());
+        r.put("marcas", marcaRepository.findAllByOrderByNombreMarcaAsc().stream()
+                .map(x -> Map.<String, Object>of("id", x.getIdMarca(), "nombre", texto(x.getNombreMarca()))).toList());
+        return r;
     }
 
     // Usuarios que pueden ser capturistas en una sede
@@ -179,10 +223,12 @@ public class LevantamientoService {
         // Acta de inicio (se guarda en Documentos)
         Map<String, Object> acta = baseActa(l, sede, inicio);
         acta.put("tipo", "ACTA_INICIO");
+        acta.put("idLevantamiento", l.getIdLevantamiento());
         acta.put("titulo", "Acta de inicio · Inventario " + l.getAnio() + " · " + sede.getNombreSede());
         Documento doc = documentoFormatoService.registrarActa("ACTA_INICIO", idSede, acta, u, l.getAnio());
         l.setIdDocumentoInicio(doc.getIdDocumento());
         levantamientoRepository.save(l);
+        asegurarActaBorrador(l, u);
         return resumen(l, u);
     }
 
@@ -192,17 +238,8 @@ public class LevantamientoService {
                                          byte[] foto, String tipoFoto) {
         Usuario u = usuarioActual();
         Levantamiento l = buscar(id);
-        if (!"EN_CURSO".equals(l.getEstado())) throw new ResponseStatusException(HttpStatus.CONFLICT, "El levantamiento ya está cerrado");
-        if (!u.getIdUsuario().equals(l.getIdUsuarioCapturista()) && !puedeAdministrar(u, l.getIdSede())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el capturista asignado puede registrar bienes");
-        }
-        Bien bien = bienRepository.findByIdBienAndActivoTrue(idBien)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El bien no existe o está dado de baja"));
-        Long sedeBien = bien.getUbicacion() != null && bien.getUbicacion().getSede() != null ? bien.getUbicacion().getSede().getIdSede() : null;
-        if (!l.getIdSede().equals(sedeBien)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este bien pertenece a otra sede (" +
-                    (bien.getUbicacion() != null && bien.getUbicacion().getSede() != null ? bien.getUbicacion().getSede().getNombreSede() : "sin sede") + ")");
-        }
+        validarCaptura(u, l);
+        Bien bien = bienDeLaSede(l, idBien);
         List<?> opciones = l.getPregunta() != null && l.getPregunta().get("opciones") instanceof List<?> o ? o : OPCIONES_DEFAULT;
         if (respuesta == null || opciones.stream().noneMatch(x -> String.valueOf(x).equals(respuesta))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Elige una respuesta");
@@ -231,9 +268,12 @@ public class LevantamientoService {
         Long ubicacionRegistrada = bien.getUbicacion() != null ? bien.getUbicacion().getIdUbicacion() : null;
         r.setFueraDeLugar(idUbicacionArea != null && !idUbicacionArea.equals(ubicacionRegistrada));
         r.setFotoTomada(Boolean.TRUE.equals(r.getFotoTomada()) || fotoNueva);
+        r.setEstatus(REVISADO);
         r.setIdUsuario(u.getIdUsuario());
         r.setFecha(LocalDateTime.now());
-        registroRepository.save(r);
+        registroRepository.saveAndFlush(r);
+        actualizarResguardos(l, Collections.singleton(idPersona(bien)), u);
+        asegurarActaBorrador(l, u);
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", true);
@@ -242,8 +282,176 @@ public class LevantamientoService {
         resp.put("fotoNueva", fotoNueva);
         resp.put("foto_mini", fotoStorage.urlMini(bien.getFotoKey()));
         resp.put("foto_url", fotoStorage.urlGrande(bien.getFotoKey()));
-        resp.put("capturados", registroRepository.countByIdLevantamiento(id));
+        resp.put("capturados", contar(registroRepository.findByIdLevantamiento(id), REVISADO));
         return resp;
+    }
+
+    // ===================== No encontrado =====================
+
+    // Palomita "No encontrado": el bien esta en el sistema pero no aparecio fisicamente
+    public Map<String, Object> marcarNoEncontrado(Long id, Long idBien) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarCaptura(u, l);
+        Bien bien = bienDeLaSede(l, idBien);
+        LevantamientoRegistro r = registroRepository.findByIdLevantamientoAndIdBien(id, idBien).orElseGet(LevantamientoRegistro::new);
+        r.setIdLevantamiento(id);
+        r.setIdBien(idBien);
+        r.setEstatus(NO_ENCONTRADO);
+        r.setRespuesta(null);
+        r.setIdUbicacionEncontrada(null);
+        r.setFueraDeLugar(false);
+        r.setFotoTomada(Boolean.TRUE.equals(r.getFotoTomada()));
+        r.setIdUsuario(u.getIdUsuario());
+        r.setFecha(LocalDateTime.now());
+        registroRepository.saveAndFlush(r);
+        actualizarResguardos(l, Collections.singleton(idPersona(bien)), u);
+        asegurarActaBorrador(l, u);
+        return itemBien(bien, r, null);
+    }
+
+    // ===================== Buscar en todo el inventario =====================
+
+    // Busca en TODAS las sedes (clave, serie, articulo, modelo, marca o el ID del QR)
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> buscarGeneral(Long id, String q) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarVer(u, l);
+        String t = texto(q).toLowerCase(MX);
+        if (t.length() < 2) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe al menos 2 letras o números");
+        String idQr = t.replace("-", "").toUpperCase(MX);
+        List<Map<String, Object>> lista = new ArrayList<>();
+        for (Bien b : bienRepository.findByActivoTrueOrderByIdBienDesc()) {
+            boolean coincide = texto(b.getClave()).toLowerCase(MX).contains(t)
+                    || texto(b.getNumeroSerie()).toLowerCase(MX).contains(t)
+                    || texto(b.getArticulo()).toLowerCase(MX).contains(t)
+                    || texto(b.getModelo()).toLowerCase(MX).contains(t)
+                    || (b.getMarca() != null && texto(b.getMarca().getNombreMarca()).toLowerCase(MX).contains(t))
+                    || (idQr.length() == 8 && texto(b.getCodigoQr()).replace("-", "").toUpperCase(MX).startsWith(idQr));
+            if (!coincide) continue;
+            Map<String, Object> m = itemBien(b, null, null);
+            Long sedeBien = idSedeDe(b);
+            m.put("id_sede", sedeBien);
+            m.put("en_esta_sede", l.getIdSede().equals(sedeBien));
+            lista.add(m);
+            if (lista.size() >= 25) break;
+        }
+        return lista;
+    }
+
+    // ===================== Traer de otra sede =====================
+
+    // El bien aparecio aqui pero el sistema lo tiene en otra sede: se mueve a esta (area y persona)
+    public Map<String, Object> traer(Long id, Long idBien, Long idUbicacion, Long idPersonaNueva) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarCaptura(u, l);
+        Bien bien = bienRepository.findByIdBienAndActivoTrue(idBien)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El bien no existe o está dado de baja"));
+        Long sedeAnterior = idSedeDe(bien);
+        if (l.getIdSede().equals(sedeAnterior)) throw new ResponseStatusException(HttpStatus.CONFLICT, "Este bien ya es de esta sede");
+        String nombreSedeAnterior = bien.getUbicacion() != null && bien.getUbicacion().getSede() != null
+                ? bien.getUbicacion().getSede().getNombreSede() : "Sin sede";
+        Long personaAnterior = idPersona(bien);
+
+        bien.setUbicacion(areaDeLaSede(l, idUbicacion));
+        if (idPersonaNueva != null) bien.setUsuarioDirecto(personaActiva(idPersonaNueva));
+        bienRepository.saveAndFlush(bien);
+
+        // Si la otra sede tiene un levantamiento abierto, ahi deja de contarse
+        for (Levantamiento otro : levantamientoRepository.findAllByOrderByIdLevantamientoDesc()) {
+            if (otro.getIdLevantamiento().equals(id) || !"EN_CURSO".equals(otro.getEstado())) continue;
+            Optional<LevantamientoRegistro> x = registroRepository.findByIdLevantamientoAndIdBien(otro.getIdLevantamiento(), idBien);
+            if (x.isPresent()) {
+                registroRepository.delete(x.get());
+                registroRepository.flush();
+                actualizarResguardos(otro, Collections.singleton(personaAnterior), u);
+            }
+        }
+
+        LevantamientoRegistro r = registroRepository.findByIdLevantamientoAndIdBien(id, idBien).orElseGet(LevantamientoRegistro::new);
+        if (r.getIdRegistro() == null) r.setEstatus(PENDIENTE);
+        r.setIdLevantamiento(id);
+        r.setIdBien(idBien);
+        r.setOrigen("TRANSFERIDO");
+        r.setSedeAnterior(limitar(nombreSedeAnterior, 150));
+        r.setIdUsuario(u.getIdUsuario());
+        r.setFecha(LocalDateTime.now());
+        registroRepository.saveAndFlush(r);
+        Set<Long> afectadas = new HashSet<>();
+        afectadas.add(personaAnterior);
+        afectadas.add(idPersona(bien));
+        actualizarResguardos(l, afectadas, u);
+        asegurarActaBorrador(l, u);
+        return itemBien(bien, r, null);
+    }
+
+    // ===================== Bien nuevo =====================
+
+    // Bien que no estaba en el sistema: entra directo (sin autorizacion) y queda pendiente de revisar
+    public Map<String, Object> nuevoBien(Long id, Map<String, Object> datos) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarCaptura(u, l);
+        String articulo = limitar(texto(datos.get("articulo")), 200);
+        if (articulo.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe qué es el bien");
+        Ubicacion area = areaDeLaSede(l, largo(datos.get("idUbicacion")));
+        Sede sede = sedeRepository.findById(l.getIdSede()).orElseThrow();
+
+        String clave = limitar(texto(datos.get("clave")).toUpperCase(MX), 50);
+        if (clave.isBlank()) clave = siguienteClave(sede);
+        else if (bienRepository.existsByClave(clave)) throw new ResponseStatusException(HttpStatus.CONFLICT, "La clave " + clave + " ya existe");
+
+        Bien b = new Bien();
+        b.setClave(clave);
+        b.setArticulo(articulo);
+        b.setCaracteristicas(vacioANull(limitar(texto(datos.get("caracteristicas")), 500)));
+        b.setModelo(vacioANull(limitar(texto(datos.get("modelo")), 150)));
+        b.setNumeroSerie(vacioANull(limitar(texto(datos.get("numeroSerie")), 150)));
+        Long idClas = largo(datos.get("idClasificacion"));
+        if (idClas != null) b.setClasificacion(clasificacionRepository.findById(idClas).orElse(null));
+        Long idMarca = largo(datos.get("idMarca"));
+        if (idMarca != null) b.setMarca(marcaRepository.findById(idMarca).orElse(null));
+        Long idPer = largo(datos.get("idPersona"));
+        if (idPer != null) b.setUsuarioDirecto(personaActiva(idPer));
+        b.setUbicacion(area);
+        b.setCantidadPiezas(1);
+        b.setUsuarioRegistro(u);
+        bienRepository.saveAndFlush(b);
+
+        LevantamientoRegistro r = new LevantamientoRegistro();
+        r.setIdLevantamiento(id);
+        r.setIdBien(b.getIdBien());
+        r.setEstatus(PENDIENTE);
+        r.setOrigen("NUEVO");
+        r.setIdUsuario(u.getIdUsuario());
+        r.setFecha(LocalDateTime.now());
+        registroRepository.saveAndFlush(r);
+
+        // Formato de alta, igual que un alta directa del administrador
+        Documento alta = documentoFormatoService.registrar("ALTA", b, null, u, u,
+                "Alta registrada durante el inventario " + l.getAnio() + " de la sede " + sede.getNombreSede() + ".");
+        asegurarActaBorrador(l, u);
+        Map<String, Object> m = itemBien(b, r, null);
+        m.put("idDocumentoAlta", alta.getIdDocumento());
+        return m;
+    }
+
+    // Prefijo de la sede + el numero siguiente (ej. CE1839)
+    private String siguienteClave(Sede sede) {
+        String prefijo = texto(sede.getPrefijoClave()).toUpperCase(MX);
+        if (prefijo.isBlank()) prefijo = "B";
+        int max = 0, digitos = 4;
+        for (Bien x : bienRepository.findByClaveStartingWithIgnoreCase(prefijo)) {
+            String resto = texto(x.getClave()).substring(prefijo.length());
+            if (!resto.matches("[0-9]{1,9}")) continue;
+            max = Math.max(max, Integer.parseInt(resto));
+            digitos = Math.max(digitos, resto.length());
+        }
+        String clave;
+        do { clave = prefijo + String.format("%0" + digitos + "d", ++max); } while (bienRepository.existsByClave(clave));
+        return clave;
     }
 
     // ===================== Eliminar =====================
@@ -270,9 +478,13 @@ public class LevantamientoService {
             });
         }
         registroRepository.deleteAll(regs);
+        // Actas, resguardos y borradores de este levantamiento (los bienes nuevos y sus altas se quedan)
+        List<Documento> docs = new ArrayList<>(documentoRepository.findByIdLevantamiento(id));
         for (Long idDoc : Arrays.asList(l.getIdDocumentoInicio(), l.getIdDocumentoCierre())) {
-            if (idDoc != null) documentoRepository.deleteById(idDoc);
+            if (idDoc != null && docs.stream().noneMatch(d -> idDoc.equals(d.getIdDocumento())))
+                documentoRepository.findById(idDoc).ifPresent(docs::add);
         }
+        documentoRepository.deleteAll(docs);
         levantamientoRepository.delete(l);
 
         int fallidas = 0;
@@ -295,8 +507,41 @@ public class LevantamientoService {
         if (!"EN_CURSO".equals(l.getEstado())) throw new ResponseStatusException(HttpStatus.CONFLICT, "El levantamiento ya está cerrado");
         Sede sede = sedeRepository.findById(l.getIdSede()).orElseThrow();
         LocalDateTime cierre = LocalDateTime.now();
+        Map<String, Object> acta = construirActaCierre(l, sede, cierre);
 
-        Map<Long, LevantamientoRegistro> registros = registroRepository.findByIdLevantamiento(id).stream()
+        // El borrador del acta se vuelve definitivo (mismo folio); si no habia, se crea
+        Documento doc = l.getIdDocumentoCierre() == null ? null : documentoRepository.findById(l.getIdDocumentoCierre()).orElse(null);
+        if (doc != null) {
+            acta.put("folio", doc.getFolio());
+            doc.setDatos(acta);
+            doc.setEstado("VIGENTE");
+            doc.setFechaCreacion(cierre);
+            documentoRepository.save(doc);
+        } else {
+            doc = documentoFormatoService.registrarActa("ACTA_CIERRE", l.getIdSede(), acta, u, l.getAnio());
+        }
+        l.setEstado("CERRADO");
+        l.setFechaCierre(cierre);
+        l.setIdDocumentoCierre(doc.getIdDocumento());
+        levantamientoRepository.save(l);
+
+        // Resguardos: quedan emitidos (vigentes) y los anteriores de cada persona pasan a historico
+        actualizarResguardos(l, null, u);
+        return resumen(l, u);
+    }
+
+    // Acta de cierre al momento (borrador que se ve en Documentos mientras el inventario sigue)
+    @Transactional(readOnly = true)
+    public Map<String, Object> datosActaCierre(Long idLevantamiento) {
+        Levantamiento l = buscar(idLevantamiento);
+        Sede sede = sedeRepository.findById(l.getIdSede()).orElseThrow();
+        return construirActaCierre(l, sede, LocalDateTime.now());
+    }
+
+    private Map<String, Object> construirActaCierre(Levantamiento l, Sede sede, LocalDateTime cierre) {
+        List<LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(l.getIdLevantamiento());
+        Map<Long, LevantamientoRegistro> registros = regs.stream()
+                .filter(r -> REVISADO.equals(r.getEstatus()))
                 .collect(Collectors.toMap(LevantamientoRegistro::getIdBien, r -> r, (a, b) -> a));
         Map<String, Integer> porClasificacion = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         Map<String, Integer> porRespuesta = new LinkedHashMap<>();
@@ -336,17 +581,137 @@ public class LevantamientoService {
         totales.put("noLocalizados", total - encontrados);
         totales.put("fueraDeLugar", fuera);
         totales.put("respuestas", porRespuesta);
+        totales.put("marcadosNoEncontrados", contar(regs, NO_ENCONTRADO));
+        totales.put("nuevos", regs.stream().filter(r -> "NUEVO".equals(r.getOrigen())).count());
+        totales.put("transferidos", regs.stream().filter(r -> "TRANSFERIDO".equals(r.getOrigen())).count());
         acta.put("totales", totales);
         acta.put("pregunta", l.getPregunta() != null ? l.getPregunta().get("texto") : "");
         acta.put("listado", listado);
         acta.put("fechaInicioTexto", fechaLarga(l.getFechaInicio()));
+        return acta;
+    }
 
-        Documento doc = documentoFormatoService.registrarActa("ACTA_CIERRE", l.getIdSede(), acta, u, l.getAnio());
-        l.setEstado("CERRADO");
-        l.setFechaCierre(cierre);
+    // ===================== Resguardos individuales =====================
+
+    // Arma (o actualiza) el resguardo de cada persona con los bienes REVISADOS a su cargo.
+    // personas = null -> todas. En curso queda como BORRADOR; al cerrar, VIGENTE.
+    private void actualizarResguardos(Levantamiento l, Set<Long> personas, Usuario u) {
+        if (personas != null) {
+            personas = personas.stream().filter(Objects::nonNull).collect(Collectors.toSet());
+            if (personas.isEmpty()) return;
+        }
+        boolean cerrado = "CERRADO".equals(l.getEstado());
+        Map<Long, LevantamientoRegistro> revisados = registroRepository.findByIdLevantamiento(l.getIdLevantamiento()).stream()
+                .filter(r -> REVISADO.equals(r.getEstatus()))
+                .collect(Collectors.toMap(LevantamientoRegistro::getIdBien, r -> r, (a, b) -> a));
+        Map<Long, List<Bien>> porPersona = new HashMap<>();
+        for (Bien b : bienRepository.findAllById(revisados.keySet())) {
+            Long p = idPersona(b);
+            if (p == null || !Boolean.TRUE.equals(b.getActivo()) || !l.getIdSede().equals(idSedeDe(b))) continue;
+            if (personas != null && !personas.contains(p)) continue;
+            porPersona.computeIfAbsent(p, k -> new ArrayList<>()).add(b);
+        }
+        Set<Long> aRevisar = personas != null ? new HashSet<>(personas) : new HashSet<>(porPersona.keySet());
+        if (personas == null) {
+            // Tambien los que ya existian y se quedaron sin bienes
+            documentoRepository.findByIdLevantamiento(l.getIdLevantamiento()).stream()
+                    .filter(d -> "RESGUARDO".equals(d.getTipo()) && d.getIdPersona() != null)
+                    .forEach(d -> aRevisar.add(d.getIdPersona()));
+        }
+        Sede sede = sedeRepository.findById(l.getIdSede()).orElseThrow();
+        for (Long idPer : aRevisar) {
+            List<Bien> bienes = porPersona.getOrDefault(idPer, List.of());
+            Optional<Documento> existente = documentoRepository.findFirstByIdLevantamientoAndTipoAndIdPersona(l.getIdLevantamiento(), "RESGUARDO", idPer);
+            if (bienes.isEmpty()) {
+                existente.ifPresent(documentoRepository::delete);
+                continue;
+            }
+            Persona persona = personaRepository.findById(idPer).orElse(null);
+            if (persona == null) continue;
+            Map<String, Object> datos = construirResguardo(l, sede, persona, bienes, revisados);
+            Documento doc;
+            if (existente.isPresent()) {
+                doc = existente.get();
+                datos.put("folio", doc.getFolio());
+                doc.setDatos(datos);
+                doc.setEstado(cerrado ? "VIGENTE" : "BORRADOR");
+                if (cerrado) doc.setFechaCreacion(LocalDateTime.now());
+                documentoRepository.save(doc);
+            } else {
+                doc = documentoFormatoService.registrarDocumentoInventario("RESGUARDO", l.getIdSede(), l.getIdLevantamiento(),
+                        idPer, datos, u, l.getAnio(), cerrado ? "VIGENTE" : "BORRADOR");
+            }
+            if (cerrado) {
+                // El resguardo anterior de la persona queda como historico
+                for (Documento viejo : documentoRepository.findByTipoAndIdPersonaAndEstado("RESGUARDO", idPer, "VIGENTE")) {
+                    if (!viejo.getIdDocumento().equals(doc.getIdDocumento())) {
+                        viejo.setEstado("HISTORICO");
+                        documentoRepository.save(viejo);
+                    }
+                }
+            }
+        }
+    }
+
+    // Datos del formato FA-04-02-02 "Resguardo de Inventarios"
+    private Map<String, Object> construirResguardo(Levantamiento l, Sede sede, Persona p, List<Bien> bienes,
+                                                   Map<Long, LevantamientoRegistro> registros) {
+        LocalDateTime hoy = LocalDateTime.now();
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("tipo", "RESGUARDO");
+        d.put("folio", "");
+        d.put("titulo", "Resguardo · " + texto(p.getNombreCompleto()));
+        d.put("formato", "FA-04-02-02");
+        d.put("revision", "2");
+        d.put("sede", sede.getNombreSede());
+        d.put("anio", l.getAnio());
+        d.put("levantamiento", "Inventario " + l.getAnio() + " · " + sede.getNombreSede());
+        d.put("idLevantamiento", l.getIdLevantamiento());
+        d.put("fecha", hoy.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+        Map<String, Object> persona = new LinkedHashMap<>();
+        persona.put("nombre", texto(p.getNombreCompleto()));
+        persona.put("numeroEmpleado", texto(p.getNumeroEmpleado()));
+        persona.put("puesto", p.getPuesto() != null ? texto(p.getPuesto().getNombrePuesto()) : "");
+        persona.put("area", p.getPuesto() != null && p.getPuesto().getDepartamento() != null
+                ? texto(p.getPuesto().getDepartamento().getNombreDepartamento()) : "");
+        d.put("persona", persona);
+        List<Map<String, Object>> filas = new ArrayList<>();
+        bienes.stream().sorted(Comparator.comparing(b -> texto(b.getClave()), String.CASE_INSENSITIVE_ORDER)).forEach(b -> {
+            LevantamientoRegistro r = registros.get(b.getIdBien());
+            Map<String, Object> f = new LinkedHashMap<>();
+            f.put("nombre", texto(b.getArticulo()));
+            f.put("descripcion", unir(" · ", b.getCaracteristicas(), b.getMarca() != null ? b.getMarca().getNombreMarca() : null));
+            f.put("clave", texto(b.getClave()));
+            String ms = unir(" / ", b.getModelo(), b.getNumeroSerie());
+            f.put("modeloSerie", ms.isBlank() ? "SIN MODELO" : ms);
+            f.put("area", b.getUbicacion() != null ? texto(b.getUbicacion().getNombreArea()) : "");
+            f.put("piezas", b.getCantidadPiezas() != null ? b.getCantidadPiezas() : 1);
+            f.put("estado", r != null ? texto(r.getRespuesta()) : "");
+            f.put("origen", r != null ? r.getOrigen() : null);
+            f.put("sedeAnterior", r != null ? r.getSedeAnterior() : null);
+            filas.add(f);
+        });
+        d.put("filas", filas);
+        d.put("totalBienes", filas.size());
+        d.put("recursosNombre", "Juan Carlos Zuno Muñiz");
+        d.put("recursosCargo", "Jefe de recursos materiales");
+        return d;
+    }
+
+    // Acta de cierre en BORRADOR desde que empieza el levantamiento (sus datos se arman al abrirla)
+    private void asegurarActaBorrador(Levantamiento l, Usuario u) {
+        if (l.getIdDocumentoCierre() != null || !"EN_CURSO".equals(l.getEstado())) return;
+        Sede sede = sedeRepository.findById(l.getIdSede()).orElseThrow();
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("tipo", "ACTA_CIERRE");
+        d.put("titulo", "Acta de cierre · Inventario " + l.getAnio() + " · " + sede.getNombreSede());
+        d.put("sede", sede.getNombreSede());
+        d.put("anio", l.getAnio());
+        d.put("idLevantamiento", l.getIdLevantamiento());
+        Documento doc = documentoFormatoService.registrarDocumentoInventario("ACTA_CIERRE", l.getIdSede(), l.getIdLevantamiento(),
+                null, d, u, l.getAnio(), "BORRADOR");
         l.setIdDocumentoCierre(doc.getIdDocumento());
         levantamientoRepository.save(l);
-        return resumen(l, u);
     }
 
     // ===================== Foto del bien =====================
@@ -402,8 +767,13 @@ public class LevantamientoService {
         m.put("idDocumentoCierre", l.getIdDocumentoCierre());
         m.put("totalBienes", bienesDeSede(l.getIdSede()).size());
         List<LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(l.getIdLevantamiento());
-        m.put("capturados", regs.size());
-        m.put("fueraDeLugar", regs.stream().filter(r -> Boolean.TRUE.equals(r.getFueraDeLugar())).count());
+        m.put("capturados", contar(regs, REVISADO));
+        m.put("noEncontrados", contar(regs, NO_ENCONTRADO));
+        m.put("nuevos", regs.stream().filter(r -> "NUEVO".equals(r.getOrigen())).count());
+        m.put("transferidos", regs.stream().filter(r -> "TRANSFERIDO".equals(r.getOrigen())).count());
+        m.put("resguardos", documentoRepository.findByIdLevantamiento(l.getIdLevantamiento()).stream()
+                .filter(d -> "RESGUARDO".equals(d.getTipo())).count());
+        m.put("fueraDeLugar", regs.stream().filter(r -> REVISADO.equals(r.getEstatus()) && Boolean.TRUE.equals(r.getFueraDeLugar())).count());
         m.put("fotosNuevas", regs.stream().filter(r -> Boolean.TRUE.equals(r.getFotoTomada())).count());
         m.put("soyCapturista", u.getIdUsuario().equals(l.getIdUsuarioCapturista()));
         m.put("puedoAdministrar", puedeAdministrar(u, l.getIdSede()));
@@ -417,6 +787,53 @@ public class LevantamientoService {
                         && idSede.equals(b.getUbicacion().getSede().getIdSede()))
                 .toList();
     }
+
+    private static long contar(List<LevantamientoRegistro> regs, String estatus) {
+        return regs.stream().filter(r -> estatus.equals(r.getEstatus())).count();
+    }
+
+    private static Long idPersona(Bien b) {
+        return b.getUsuarioDirecto() != null ? b.getUsuarioDirecto().getIdPersona() : null;
+    }
+
+    private static Long idSedeDe(Bien b) {
+        return b.getUbicacion() != null && b.getUbicacion().getSede() != null ? b.getUbicacion().getSede().getIdSede() : null;
+    }
+
+    // Capturar: levantamiento abierto y ser el capturista o administrador de la sede
+    private void validarCaptura(Usuario u, Levantamiento l) {
+        if (!"EN_CURSO".equals(l.getEstado())) throw new ResponseStatusException(HttpStatus.CONFLICT, "El levantamiento ya está cerrado");
+        if (!u.getIdUsuario().equals(l.getIdUsuarioCapturista()) && !puedeAdministrar(u, l.getIdSede())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el capturista asignado puede registrar bienes");
+        }
+    }
+
+    private Bien bienDeLaSede(Levantamiento l, Long idBien) {
+        Bien bien = bienRepository.findByIdBienAndActivoTrue(idBien)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El bien no existe o está dado de baja"));
+        if (!l.getIdSede().equals(idSedeDe(bien))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este bien pertenece a otra sede (" +
+                    (bien.getUbicacion() != null && bien.getUbicacion().getSede() != null ? bien.getUbicacion().getSede().getNombreSede() : "sin sede") + ")");
+        }
+        return bien;
+    }
+
+    private Ubicacion areaDeLaSede(Levantamiento l, Long idUbicacion) {
+        if (idUbicacion == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Elige el área donde queda el bien");
+        Ubicacion a = ubicacionRepository.findById(idUbicacion)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "El área no existe"));
+        if (a.getSede() == null || !l.getIdSede().equals(a.getSede().getIdSede())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El área no es de esta sede");
+        }
+        return a;
+    }
+
+    private Persona personaActiva(Long idPersona) {
+        return personaRepository.findByIdPersonaAndEstatusTrue(idPersona)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "La persona no existe o está inactiva"));
+    }
+
+    private static String vacioANull(String v) { return v == null || v.isBlank() ? null : v; }
 
     private Levantamiento buscar(Long id) {
         return levantamientoRepository.findById(id)

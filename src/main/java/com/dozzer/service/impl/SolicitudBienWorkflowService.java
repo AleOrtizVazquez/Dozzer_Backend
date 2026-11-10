@@ -23,6 +23,7 @@ public class SolicitudBienWorkflowService {
     @Autowired private UsuarioRepository usuarioRepository;
     @Autowired private BienServiceImpl bienService;
     @Autowired private DocumentoFormatoService documentoFormatoService;
+    @Autowired private NotificacionService notificacionService;
 
     public Map<String,Object> resolver(Long idSolicitud, boolean aprobar, String motivo) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -69,6 +70,8 @@ public class SolicitudBienWorkflowService {
         solicitud.setUsuarioRevisor(revisor);
         solicitud.setFechaResolucion(LocalDateTime.now());
         solicitudRepository.save(solicitud);
+        // Aviso al celular del empleado que la pidió
+        notificacionService.solicitudResuelta(solicitud);
 
         Map<String,Object> respuesta = new java.util.HashMap<>();
         respuesta.put("success", true);

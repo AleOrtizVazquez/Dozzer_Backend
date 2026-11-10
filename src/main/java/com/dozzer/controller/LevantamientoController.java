@@ -64,6 +64,42 @@ public class LevantamientoController {
         }
     }
 
+    // Palomita "No encontrado"
+    @PostMapping("/levantamientos/{id}/no-encontrados")
+    public Map<String, Object> noEncontrado(@PathVariable Long id, @RequestBody Map<String, Object> datos) {
+        return service.marcarNoEncontrado(id, largo(datos.get("idBien")));
+    }
+
+    // Áreas, personas y catálogos de la sede
+    @GetMapping("/levantamientos/{id}/opciones")
+    public Map<String, Object> opciones(@PathVariable Long id) {
+        return service.opciones(id);
+    }
+
+    // Buscar un bien en todo el inventario (todas las sedes)
+    @GetMapping("/levantamientos/{id}/buscar")
+    public List<Map<String, Object>> buscar(@PathVariable Long id, @RequestParam String q) {
+        return service.buscarGeneral(id, q);
+    }
+
+    // Traer a esta sede un bien que el sistema tiene en otra
+    @PostMapping("/levantamientos/{id}/traer")
+    public Map<String, Object> traer(@PathVariable Long id, @RequestBody Map<String, Object> datos) {
+        return service.traer(id, largo(datos.get("idBien")), largo(datos.get("idUbicacion")), largo(datos.get("idPersona")));
+    }
+
+    // Bien nuevo encontrado durante el levantamiento (entra directo)
+    @PostMapping("/levantamientos/{id}/bienes-nuevos")
+    public Map<String, Object> nuevoBien(@PathVariable Long id, @RequestBody Map<String, Object> datos) {
+        return service.nuevoBien(id, datos == null ? Map.of() : datos);
+    }
+
+    private static Long largo(Object v) {
+        if (v == null || String.valueOf(v).isBlank()) return null;
+        try { return Long.valueOf(String.valueOf(v).trim()); }
+        catch (NumberFormatException e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dato numérico no válido"); }
+    }
+
     @DeleteMapping("/levantamientos/{id}")
     public Map<String, Object> eliminar(@PathVariable Long id) {
         return service.eliminar(id);

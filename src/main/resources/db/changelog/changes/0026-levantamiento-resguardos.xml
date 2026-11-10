@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Levantamiento por persona: estatus de cada bien, bienes nuevos o traidos de otra sede,
+         y resguardos individuales ligados al levantamiento y a la persona -->
+    <changeSet id="0026-levantamiento-resguardos" author="dozzer">
+        <!-- PENDIENTE (agregado o traido, falta revisarlo), REVISADO o NO_ENCONTRADO -->
+        <addColumn tableName="levantamiento_registros">
+            <column name="estatus" type="VARCHAR(20)" defaultValue="REVISADO">
+                <constraints nullable="false"/>
+            </column>
+            <!-- NUEVO (dado de alta en el levantamiento) o TRANSFERIDO (traido de otra sede) -->
+            <column name="origen" type="VARCHAR(20)"/>
+            <column name="sede_anterior" type="VARCHAR(150)"/>
+        </addColumn>
+
+        <addColumn tableName="documentos">
+            <column name="id_levantamiento" type="BIGINT"/>
+            <column name="id_persona" type="BIGINT"/>
+        </addColumn>
+        <createIndex tableName="documentos" indexName="ix_documentos_levantamiento">
+            <column name="id_levantamiento"/>
+        </createIndex>
+        <createIndex tableName="documentos" indexName="ix_documentos_persona">
+            <column name="id_persona"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

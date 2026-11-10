@@ -28,6 +28,9 @@ public interface BienRepository extends JpaRepository<Bien, Long> {
     // Verificar si existe una clave
     boolean existsByClave(String clave);
 
+    // Claves que empiezan con el prefijo de la sede (para proponer la siguiente)
+    List<Bien> findByClaveStartingWithIgnoreCase(String prefijo);
+
     // Verificar si una clave pertenece a otro bien
     boolean existsByClaveAndIdBienNot(String clave, Long idBien);
 

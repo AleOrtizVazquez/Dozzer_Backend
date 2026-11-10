@@ -29,7 +29,7 @@ public class Documento {
     @Column(name = "folio", length = 30, unique = true)
     private String folio;
 
-    // VIGENTE o ANULADO (cuando se revoca la autorización que lo originó)
+    // VIGENTE, ANULADO (se revocó la autorización), BORRADOR (inventario en curso) o HISTORICO (resguardo reemplazado)
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "VIGENTE";
 
@@ -47,6 +47,13 @@ public class Documento {
 
     @Column(name = "id_usuario_autorizo")
     private Long idUsuarioAutorizo;
+
+    // Resguardos y actas del inventario: levantamiento que los generó y persona del resguardo
+    @Column(name = "id_levantamiento")
+    private Long idLevantamiento;
+
+    @Column(name = "id_persona")
+    private Long idPersona;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "datos", nullable = false, columnDefinition = "jsonb")

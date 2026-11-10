@@ -43,4 +43,15 @@ public class LevantamientoRegistro {
 
     @Column(name = "fecha", nullable = false)
     private LocalDateTime fecha;
+
+    // PENDIENTE (agregado o traído, falta revisarlo), REVISADO o NO_ENCONTRADO
+    @Column(name = "estatus", nullable = false, length = 20)
+    private String estatus = "REVISADO";
+
+    // NUEVO (alta durante el levantamiento) o TRANSFERIDO (traído de otra sede)
+    @Column(name = "origen", length = 20)
+    private String origen;
+
+    @Column(name = "sede_anterior", length = 150)
+    private String sedeAnterior;
 }

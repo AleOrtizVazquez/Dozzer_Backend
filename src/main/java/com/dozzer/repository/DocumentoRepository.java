@@ -17,4 +17,13 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<Documento> findByIdUsuarioSolicitanteOrderByIdDocumentoDesc(Long idUsuario);
 
     List<Documento> findByIdSolicitud(Long idSolicitud);
+
+    // Empleado: lo que solicitó y sus resguardos
+    List<Documento> findByIdUsuarioSolicitanteOrIdPersonaOrderByIdDocumentoDesc(Long idUsuario, Long idPersona);
+
+    List<Documento> findByIdLevantamiento(Long idLevantamiento);
+
+    java.util.Optional<Documento> findFirstByIdLevantamientoAndTipoAndIdPersona(Long idLevantamiento, String tipo, Long idPersona);
+
+    List<Documento> findByTipoAndIdPersonaAndEstado(String tipo, Long idPersona, String estado);
 }

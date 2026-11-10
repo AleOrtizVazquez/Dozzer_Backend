@@ -30,5 +30,7 @@
  <include file="db/changelog/changes/0023-documentos.xml"/>
  <include file="db/changelog/changes/0024-levantamientos.xml"/>
  <include file="db/changelog/changes/0025-sedes-direccion.xml"/>
+ <include file="db/changelog/changes/0026-levantamiento-resguardos.xml"/>
+ <include file="db/changelog/changes/0027-notificaciones-push.xml"/>
 
 </databaseChangeLog>

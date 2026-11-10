@@ -27,6 +27,8 @@ public class DocumentoFormatoService {
 
     @Autowired private DocumentoRepository documentoRepository;
     @Autowired private UsuarioRepository usuarioRepository;
+    // Para armar al momento el borrador del acta de cierre (se carga perezoso: evita el ciclo)
+    @Autowired @org.springframework.context.annotation.Lazy private LevantamientoService levantamientoService;
 
     // ---------- Registro ----------
 
@@ -102,16 +104,26 @@ public class DocumentoFormatoService {
 
     // Actas del inventario anual (inicio y cierre): datos ya armados por el levantamiento
     public Documento registrarActa(String tipo, Long idSede, Map<String, Object> datos, Usuario usuario, int anio) {
+        Object idLev = datos.get("idLevantamiento");
+        Long idLevantamiento = idLev == null ? null : Long.valueOf(String.valueOf(idLev));
+        return registrarDocumentoInventario(tipo, idSede, idLevantamiento, null, datos, usuario, anio, "VIGENTE");
+    }
+
+    // Actas y resguardos del inventario. Folio: AI- (acta de inicio), AC- (acta de cierre), R- (resguardo)
+    public Documento registrarDocumentoInventario(String tipo, Long idSede, Long idLevantamiento, Long idPersona,
+                                                  Map<String, Object> datos, Usuario usuario, int anio, String estado) {
         Documento doc = new Documento();
         doc.setTipo(tipo);
-        doc.setEstado("VIGENTE");
+        doc.setEstado(estado);
         doc.setIdSede(idSede);
+        doc.setIdLevantamiento(idLevantamiento);
+        doc.setIdPersona(idPersona);
         doc.setIdUsuarioSolicitante(usuario != null ? usuario.getIdUsuario() : null);
         doc.setIdUsuarioAutorizo(usuario != null ? usuario.getIdUsuario() : null);
         doc.setDatos(datos);
         documentoRepository.saveAndFlush(doc);
-        String folio = ("ACTA_INICIO".equals(tipo) ? "AI" : "AC") + "-" + String.valueOf(anio).substring(2)
-                + "-" + String.format("%04d", doc.getIdDocumento());
+        String prefijo = "ACTA_INICIO".equals(tipo) ? "AI" : "ACTA_CIERRE".equals(tipo) ? "AC" : "R";
+        String folio = prefijo + "-" + String.valueOf(anio).substring(2) + "-" + String.format("%04d", doc.getIdDocumento());
         doc.setFolio(folio);
         Map<String, Object> conFolio = new LinkedHashMap<>(datos);
         conFolio.put("folio", folio);
@@ -147,6 +159,7 @@ public class DocumentoFormatoService {
         r.put("ALTA", docs.stream().filter(d -> "ALTA".equals(d.getTipo())).count());
         r.put("BAJA", docs.stream().filter(d -> "BAJA".equals(d.getTipo())).count());
         r.put("ACTAS", docs.stream().filter(d -> d.getTipo() != null && d.getTipo().startsWith("ACTA")).count());
+        r.put("RESGUARDO", docs.stream().filter(d -> "RESGUARDO".equals(d.getTipo())).count());
         return r;
     }
 
@@ -156,7 +169,13 @@ public class DocumentoFormatoService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento no encontrado"));
         if (!puedeVer(doc)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes acceso a este documento");
         Map<String, Object> r = resumen(doc);
-        r.put("datos", doc.getDatos());
+        Map<String, Object> datos = doc.getDatos();
+        // Acta de cierre en borrador: se arma con lo capturado hasta este momento
+        if ("BORRADOR".equals(doc.getEstado()) && "ACTA_CIERRE".equals(doc.getTipo()) && doc.getIdLevantamiento() != null) {
+            datos = new LinkedHashMap<>(levantamientoService.datosActaCierre(doc.getIdLevantamiento()));
+            datos.put("folio", doc.getFolio());
+        }
+        r.put("datos", datos);
         return r;
     }
 
@@ -165,17 +184,19 @@ public class DocumentoFormatoService {
         Alcance a = alcance();
         if (a.todos) return documentoRepository.findAllByOrderByIdDocumentoDesc();
         if (!a.sedes.isEmpty()) return documentoRepository.findByIdSedeInOrderByIdDocumentoDesc(a.sedes);
-        return documentoRepository.findByIdUsuarioSolicitanteOrderByIdDocumentoDesc(a.idUsuario);
+        return documentoRepository.findByIdUsuarioSolicitanteOrIdPersonaOrderByIdDocumentoDesc(a.idUsuario, a.idPersona);
     }
 
     private boolean puedeVer(Documento doc) {
         Alcance a = alcance();
         if (a.todos) return true;
         if (!a.sedes.isEmpty()) return doc.getIdSede() != null && a.sedes.contains(doc.getIdSede());
-        return a.idUsuario.equals(doc.getIdUsuarioSolicitante());
+        return a.idUsuario.equals(doc.getIdUsuarioSolicitante())
+                || (doc.getIdPersona() != null && doc.getIdPersona().equals(a.idPersona));
     }
 
-    private record Alcance(boolean todos, Set<Long> sedes, Long idUsuario) {}
+    // idPersona: la persona del empleado (para ver sus resguardos); -1 si no tiene
+    private record Alcance(boolean todos, Set<Long> sedes, Long idUsuario, Long idPersona) {}
 
     private Alcance alcance() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -185,9 +206,10 @@ public class DocumentoFormatoService {
         boolean admin = u.getRoles().stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getNombre()));
         boolean revisor = auth.getAuthorities().stream().anyMatch(x -> "SOLICITUDES_AUTORIZAR".equals(x.getAuthority()));
         Set<Long> sedes = u.getSedes().stream().map(Sede::getIdSede).collect(Collectors.toSet());
-        if (admin && sedes.isEmpty()) return new Alcance(true, Set.of(), u.getIdUsuario());
-        if (admin || revisor) return new Alcance(false, sedes, u.getIdUsuario());
-        return new Alcance(false, Set.of(), u.getIdUsuario());
+        Long idPersona = u.getPersona() != null && u.getPersona().getIdPersona() != null ? u.getPersona().getIdPersona() : -1L;
+        if (admin && sedes.isEmpty()) return new Alcance(true, Set.of(), u.getIdUsuario(), idPersona);
+        if (admin || revisor) return new Alcance(false, sedes, u.getIdUsuario(), idPersona);
+        return new Alcance(false, Set.of(), u.getIdUsuario(), idPersona);
     }
 
     private Map<String, Object> resumen(Documento doc) {
@@ -206,6 +228,18 @@ public class DocumentoFormatoService {
         if (d.get("titulo") != null) {
             r.put("clave", d.get("sede"));
             r.put("descripcion", d.get("titulo"));
+        }
+        r.put("idLevantamiento", doc.getIdLevantamiento());
+        r.put("idPersona", doc.getIdPersona());
+        if ("RESGUARDO".equals(doc.getTipo())) {
+            Object p = d.get("persona");
+            String nombre = p instanceof Map<?, ?> pm && pm.get("nombre") != null ? String.valueOf(pm.get("nombre")) : "";
+            r.put("persona", nombre);
+            r.put("totalBienes", d.get("totalBienes"));
+            r.put("levantamiento", d.get("levantamiento"));
+            r.put("clave", nombre);
+            r.put("descripcion", d.get("totalBienes") + " bienes · " + d.get("levantamiento"));
+            return r;
         }
         Object filas = d.get("filas");
         if (filas instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map<?, ?> f) {
