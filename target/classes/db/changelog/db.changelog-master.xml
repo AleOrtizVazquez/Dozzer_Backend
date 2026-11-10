@@ -29,5 +29,6 @@
  <include file="db/changelog/changes/0022-solicitudes-revocacion.xml"/>
  <include file="db/changelog/changes/0023-documentos.xml"/>
  <include file="db/changelog/changes/0024-levantamientos.xml"/>
+ <include file="db/changelog/changes/0025-sedes-direccion.xml"/>
 
 </databaseChangeLog>

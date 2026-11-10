@@ -166,6 +166,7 @@ public class CatalogoServiceImpl implements CatalogoService {
         if(d.containsKey("entidad")) s.setEntidad(texto(d,"entidad"));
         if(d.containsKey("nombre_sede")) s.setNombreSede(texto(d,"nombre_sede"));
         if(d.containsKey("prefijo_clave")) s.setPrefijoClave(texto(d,"prefijo_clave"));
+        if(d.containsKey("direccion_completa")) s.setDireccionCompleta(texto(d,"direccion_completa"));
         if(d.containsKey("estatus")) s.setEstatus(booleano(d,"estatus"));
     }
 
@@ -259,6 +260,7 @@ public class CatalogoServiceImpl implements CatalogoService {
         m.put("nombre_entidad", s.getEntidad() != null ? entidades.get(s.getEntidad().trim()) : null);
         m.put("nombre_sede",s.getNombreSede());
         m.put("prefijo_clave",s.getPrefijoClave());
+        m.put("direccion_completa",s.getDireccionCompleta());
         m.put("estatus",s.getEstatus());
         return m;
     }

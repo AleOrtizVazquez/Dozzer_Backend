@@ -1,0 +1,4 @@
+# Llaves privadas: nunca subir
+secretos.properties
+# Fotos locales de pruebas
+fotos-bienes/

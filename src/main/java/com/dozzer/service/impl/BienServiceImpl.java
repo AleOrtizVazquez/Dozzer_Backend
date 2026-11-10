@@ -21,6 +21,8 @@ public class BienServiceImpl implements BienService {
     @Autowired
     private BienRepository bienRepository;
     @Autowired
+    private FotoStorageService fotoStorage;
+    @Autowired
     private ClasificacionRepository clasificacionRepository;
     @Autowired
     private MarcaRepository marcaRepository;
@@ -554,6 +556,8 @@ public class BienServiceImpl implements BienService {
         resultado.put("clave",bien.getClave());
         resultado.put("codigo_qr",bien.getCodigoQr());
         resultado.put("tiene_foto",bien.getFotoKey() != null);
+        resultado.put("foto_mini",fotoStorage.urlMini(bien.getFotoKey()));
+        resultado.put("foto_url",fotoStorage.urlGrande(bien.getFotoKey()));
         resultado.put("id_bien_padre",bien.getBienPadre() != null ? bien.getBienPadre().getIdBien() : null);
         resultado.put("id_clasificacion",bien.getClasificacion() != null ? bien.getClasificacion().getIdClasificacion() : null);
         resultado.put("clasificacion",bien.getClasificacion() != null ? bien.getClasificacion().getNombre() : null);

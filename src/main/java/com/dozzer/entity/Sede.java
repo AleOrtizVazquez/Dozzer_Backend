@@ -30,6 +30,9 @@ public class Sede {
     @Column(name = "prefijo_clave", length = 20)
     private String prefijoClave;
 
+    @Column(name = "direccion_completa", length = 300)
+    private String direccionCompleta;
+
     @Column(name = "estatus")
     private Boolean estatus = true;
 

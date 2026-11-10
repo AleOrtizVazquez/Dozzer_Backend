@@ -64,6 +64,11 @@ public class LevantamientoController {
         }
     }
 
+    @DeleteMapping("/levantamientos/{id}")
+    public Map<String, Object> eliminar(@PathVariable Long id) {
+        return service.eliminar(id);
+    }
+
     @PostMapping("/levantamientos/{id}/cerrar")
     public Map<String, Object> cerrar(@PathVariable Long id) {
         return service.cerrar(id);

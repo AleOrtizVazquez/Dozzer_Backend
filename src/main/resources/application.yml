@@ -5,6 +5,13 @@
     application:
       name: dozzer-backend
 
+    # Llaves privadas en un archivo local (NO se sube a git): dozzer-backend/secretos.properties
+    # Si no existe, se usan las variables de entorno (así funciona en Render).
+    config:
+      import:
+        - optional:file:./secretos.properties
+        - optional:file:./dozzer-backend/secretos.properties
+
     datasource:
       url: ${DB_URL:jdbc:postgresql://localhost:5432/dozzer}
       username: ${DB_USERNAME:postgres}
@@ -36,7 +43,19 @@
 
     # ==========================================================
     # FOTOS DE LOS BIENES (Inventario anual)
-    # Con los 4 datos de Cloudflare R2 llenos, las fotos se guardan en R2.
+    # Orden: 1) Cloudinary  2) Cloudflare R2  3) carpeta local "carpeta-local".
+    # Cloudinary: las llaves NO se escriben aquí; van como variables de entorno
+    #   CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+    #   y CLOUDINARY_FOLDER (dozzer-pruebas en pruebas, dozzer en producción).
+    #   Se obtienen en cloudinary.com > Settings > API Keys.
+    # ==========================================================
+    cloudinary:
+      cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+      api-key: ${CLOUDINARY_API_KEY:}
+      api-secret: ${CLOUDINARY_API_SECRET:}
+      folder: ${CLOUDINARY_FOLDER:dozzer}
+    # ----------------------------------------------------------
+    # Con los 4 datos de Cloudflare R2 llenos (y sin Cloudinary), las fotos se guardan en R2.
     # Mientras estén vacíos, se guardan en la carpeta local "carpeta-local".
     # R2: Cloudflare > R2 > Crear bucket; luego "Manage R2 API Tokens" > Create API token
     #     (permiso Object Read & Write) y copiar Account ID, Access Key ID y Secret Access Key.
@@ -48,6 +67,8 @@
       bucket: ${R2_BUCKET:dozzer-fotos}
     fotos:
       carpeta-local: ${FOTOS_DIR:fotos-bienes}
+      # false = si no hay Cloudinary ni R2, NO se aceptan fotos (nunca se guardan en local por accidente).
+      permitir-local: ${FOTOS_PERMITIR_LOCAL:false}
 
     admin:
       email: ${DOZZER_ADMIN_EMAIL:admin@dozzer.com}

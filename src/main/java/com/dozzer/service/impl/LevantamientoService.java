@@ -31,6 +31,7 @@ public class LevantamientoService {
     @Autowired private UbicacionRepository ubicacionRepository;
     @Autowired private DocumentoFormatoService documentoFormatoService;
     @Autowired private FotoStorageService fotoStorage;
+    @Autowired private DocumentoRepository documentoRepository;
 
     // ===================== Consulta =====================
 
@@ -59,6 +60,11 @@ public class LevantamientoService {
         validarVer(u, l);
         Map<Long, LevantamientoRegistro> registros = registroRepository.findByIdLevantamiento(id).stream()
                 .collect(Collectors.toMap(LevantamientoRegistro::getIdBien, r -> r, (a, b) -> a));
+        // Nombre del área donde se encontró cada bien (para "fuera de lugar")
+        Set<Long> idsEncontradas = registros.values().stream().map(LevantamientoRegistro::getIdUbicacionEncontrada)
+                .filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> areas = new HashMap<>();
+        ubicacionRepository.findAllById(idsEncontradas).forEach(x -> areas.put(x.getIdUbicacion(), x.getNombreArea()));
         List<Map<String, Object>> lista = new ArrayList<>();
         for (Bien b : bienesDeSede(l.getIdSede())) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -74,10 +80,13 @@ public class LevantamientoService {
             m.put("responsable", b.getResponsableArea() != null ? b.getResponsableArea().getNombreCompleto() : null);
             m.put("codigo_qr", b.getCodigoQr());
             m.put("tiene_foto", b.getFotoKey() != null);
+            m.put("foto_mini", fotoStorage.urlMini(b.getFotoKey()));
+            m.put("foto_url", fotoStorage.urlGrande(b.getFotoKey()));
             LevantamientoRegistro r = registros.get(b.getIdBien());
             if (r != null) {
                 m.put("respuesta", r.getRespuesta());
                 m.put("fuera_de_lugar", Boolean.TRUE.equals(r.getFueraDeLugar()));
+                m.put("ubicacion_encontrada", areas.get(r.getIdUbicacionEncontrada()));
                 m.put("fecha_registro", r.getFecha());
             }
             lista.add(m);
@@ -206,9 +215,7 @@ public class LevantamientoService {
             }
             if (foto.length > 8 * 1024 * 1024) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La foto es demasiado grande");
             String tipo = tipoFoto != null && tipoFoto.startsWith("image/") ? tipoFoto : "image/jpeg";
-            String ext = tipo.contains("png") ? "png" : tipo.contains("webp") ? "webp" : "jpg";
-            String llave = "bienes/" + bien.getIdBien() + "-" + bien.getCodigoQr().substring(0, 8) + "." + ext;
-            fotoStorage.guardar(llave, foto, tipo);
+            String llave = fotoStorage.guardar("bienes/" + bien.getIdBien() + "-" + bien.getCodigoQr().substring(0, 8), foto, tipo);
             bien.setFotoKey(llave);
             bien.setFotoFecha(LocalDateTime.now());
             bienRepository.save(bien);
@@ -233,7 +240,49 @@ public class LevantamientoService {
         resp.put("actualizado", yaEstaba);
         resp.put("fueraDeLugar", r.getFueraDeLugar());
         resp.put("fotoNueva", fotoNueva);
+        resp.put("foto_mini", fotoStorage.urlMini(bien.getFotoKey()));
+        resp.put("foto_url", fotoStorage.urlGrande(bien.getFotoKey()));
         resp.put("capturados", registroRepository.countByIdLevantamiento(id));
+        return resp;
+    }
+
+    // ===================== Eliminar =====================
+
+    // Borra el levantamiento, sus registros, sus actas y las fotos que se tomaron en él
+    // (en Cloudinary/R2/local). Los bienes cuya foto se borra vuelven a pedir foto.
+    public Map<String, Object> eliminar(Long id) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        if (!puedeAdministrar(u, l.getIdSede())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el administrador de la sede puede eliminarlo");
+        }
+        List<LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(id);
+        List<String> fotos = new ArrayList<>();
+        for (LevantamientoRegistro r : regs) {
+            if (!Boolean.TRUE.equals(r.getFotoTomada())) continue;
+            bienRepository.findById(r.getIdBien()).ifPresent(b -> {
+                if (b.getFotoKey() != null) {
+                    fotos.add(b.getFotoKey());
+                    b.setFotoKey(null);
+                    b.setFotoFecha(null);
+                    bienRepository.save(b);
+                }
+            });
+        }
+        registroRepository.deleteAll(regs);
+        for (Long idDoc : Arrays.asList(l.getIdDocumentoInicio(), l.getIdDocumentoCierre())) {
+            if (idDoc != null) documentoRepository.deleteById(idDoc);
+        }
+        levantamientoRepository.delete(l);
+
+        int fallidas = 0;
+        for (String k : fotos) if (!fotoStorage.borrar(k)) fallidas++;
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("registros", regs.size());
+        resp.put("fotosBorradas", fotos.size() - fallidas);
+        resp.put("fotosNoBorradas", fallidas);
         return resp;
     }
 

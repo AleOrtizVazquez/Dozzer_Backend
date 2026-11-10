@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Dirección completa de cada sede (hoja 2_Cat_Sedes de "Base Completa Maestra v8.xlsx") -->
+    <changeSet id="0025-sedes-direccion" author="dozzer">
+        <addColumn tableName="cat_sedes">
+            <column name="direccion_completa" type="VARCHAR(300)"/>
+        </addColumn>
+        <update tableName="cat_sedes">
+            <column name="direccion_completa" value="Calle Montes Balcanes # 125 Col. Arboledas 1era Sección CP. 38050"/>
+            <where>id_sede = 1</where>
+        </update>
+        <update tableName="cat_sedes">
+            <column name="direccion_completa" value="Sede Operativa Estado de México"/>
+            <where>id_sede = 2</where>
+        </update>
+        <update tableName="cat_sedes">
+            <column name="direccion_completa" value="Sede Operativa Guadalajara, Jalisco"/>
+            <where>id_sede = 3</where>
+        </update>
+        <update tableName="cat_sedes">
+            <column name="direccion_completa" value="Sede Operativa Querétaro, Qro."/>
+            <where>id_sede = 4</where>
+        </update>
+        <update tableName="cat_sedes">
+            <column name="direccion_completa" value="Sede Operativa Riberas, Guanajuato"/>
+            <where>id_sede = 5</where>
+        </update>
+        <update tableName="cat_sedes">
+            <column name="direccion_completa" value="Asignación Externa / Secretaría Guanajuato"/>
+            <where>id_sede = 6</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>
