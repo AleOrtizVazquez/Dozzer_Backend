@@ -61,6 +61,35 @@ public class RecuperacionPasswordController {
         return respuesta;
     }
 
+    // Genera una contraseña temporal DISTINTA para cada empleado que todavía no ha cambiado la suya.
+    // Las contraseñas solo se regresan en esta respuesta (el navegador las descarga en un archivo);
+    // en la base solo queda su versión cifrada. Volver a generarlas invalida las anteriores.
+    @PostMapping("/temporales-pendientes")
+    @Transactional
+    public Map<String, Object> temporalesPendientes(Authentication authentication) {
+        Usuario yo = authentication == null ? null : usuarioRepository.findByCorreoIgnoreCase(authentication.getName()).orElse(null);
+        if (yo == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sesión no válida");
+        Set<Long> misSedes = yo.getSedes().stream().map(Sede::getIdSede).collect(Collectors.toSet());
+
+        List<Map<String, Object>> lista = new ArrayList<>();
+        for (Usuario u : usuarioRepository.findAll()) {
+            if (Boolean.FALSE.equals(u.getActivo()) || !Boolean.TRUE.equals(u.getDebeCambiarPassword())) continue;
+            if (u.getRoles().stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getNombre()))) continue;
+            // Un administrador de sede solo genera las de su sede
+            if (!misSedes.isEmpty() && u.getSedes().stream().noneMatch(s -> misSedes.contains(s.getIdSede()))) continue;
+            String temporal = generarTemporal();
+            u.setPassword(passwordEncoder.encode(temporal));
+            usuarioRepository.save(u);
+            Map<String, Object> m = convertir(u);
+            m.put("numeroEmpleado", u.getPersona() != null ? u.getPersona().getNumeroEmpleado() : null);
+            m.put("passwordTemporal", temporal);
+            lista.add(m);
+        }
+        lista.sort(Comparator.comparing((Map<String, Object> m) -> String.valueOf(m.get("sedes")))
+                .thenComparing(m -> String.valueOf(m.get("nombre"))));
+        return Map.of("total", lista.size(), "usuarios", lista);
+    }
+
     private Map<String, Object> convertir(Usuario u) {
         Map<String, Object> m = new HashMap<>();
         m.put("idUsuario", u.getIdUsuario());

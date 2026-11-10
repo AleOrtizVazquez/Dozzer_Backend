@@ -112,14 +112,31 @@ public class AuthController {
  @Transactional
  public Map<String,Object> recuperarPassword(@RequestBody Map<String,String> datos) {
   String correo = datos == null || datos.get("correo") == null ? "" : datos.get("correo").trim();
+  String numero = datos == null || datos.get("numeroEmpleado") == null ? "" : datos.get("numeroEmpleado").trim();
   String nueva = datos == null ? null : datos.get("passwordNueva");
   if (correo.isEmpty() || !correo.contains("@") || correo.length() > 180) {
    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe un correo electrónico válido");
   }
+  if (numero.isEmpty() || numero.length() > 20) {
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe tu número de empleado");
+  }
+  String llave = correo.toLowerCase();
+  if (bloqueadoPorIntentos(llave)) {
+   throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+           "Demasiados intentos. Espera una hora o pide ayuda al administrador.");
+  }
 
+  // Mismo mensaje si el correo no existe o el número no coincide (no revela qué cuentas existen)
   Usuario usuario = usuarioRepository.findByCorreoIgnoreCase(correo)
           .filter(u -> !Boolean.FALSE.equals(u.getActivo()))
-          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe una cuenta activa con ese correo"));
+          .filter(u -> u.getPersona() != null && u.getPersona().getNumeroEmpleado() != null
+                  && normalizarNumero(u.getPersona().getNumeroEmpleado()).equals(normalizarNumero(numero)))
+          .orElse(null);
+  if (usuario == null) {
+   registrarIntentoFallido(llave);
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+           "El correo y el número de empleado no coinciden con una cuenta activa");
+  }
 
   boolean esAdmin = usuario.getRoles().stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getNombre()));
   if (esAdmin) {
@@ -128,11 +145,39 @@ public class AuthController {
   }
 
   validarPasswordNueva(nueva);
+  intentosRecuperacion.remove(llave);
   usuario.setPassword(passwordEncoder.encode(nueva));
   usuario.setDebeCambiarPassword(false);
   usuarioRepository.save(usuario);
 
   return Map.of("success", true, "message", "Contraseña actualizada. Ya puedes entrar con ella.");
+ }
+
+ // ---- Límite de intentos para recuperar contraseña: 5 fallos por correo en 1 hora ----
+ private static final int MAX_INTENTOS = 5;
+ private static final long VENTANA_MS = 60 * 60 * 1000L;
+ private final java.util.concurrent.ConcurrentHashMap<String, java.util.Deque<Long>> intentosRecuperacion =
+         new java.util.concurrent.ConcurrentHashMap<>();
+
+ private boolean bloqueadoPorIntentos(String llave) {
+  java.util.Deque<Long> d = intentosRecuperacion.get(llave);
+  if (d == null) return false;
+  synchronized (d) {
+   long limite = System.currentTimeMillis() - VENTANA_MS;
+   while (!d.isEmpty() && d.peekFirst() < limite) d.pollFirst();
+   return d.size() >= MAX_INTENTOS;
+  }
+ }
+
+ private void registrarIntentoFallido(String llave) {
+  if (intentosRecuperacion.size() > 10000) intentosRecuperacion.clear();
+  java.util.Deque<Long> d = intentosRecuperacion.computeIfAbsent(llave, k -> new java.util.ArrayDeque<>());
+  synchronized (d) { d.addLast(System.currentTimeMillis()); }
+ }
+
+ // "dz-0001", "DZ 0001" y "DZ0001" cuentan igual
+ private static String normalizarNumero(String n) {
+  return n == null ? "" : n.replaceAll("[\\s-]", "").toUpperCase();
  }
 
  private void validarPasswordNueva(String nueva) {

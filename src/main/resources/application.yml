@@ -1,5 +1,6 @@
   server:
-    port: 8080
+    # En Render se usa la variable PORT; en tu computadora, 8080
+    port: ${PORT:8080}
 
   spring:
     application:
@@ -16,6 +17,10 @@
       url: ${DB_URL:jdbc:postgresql://localhost:5432/dozzer}
       username: ${DB_USERNAME:postgres}
       password: ${DB_PASSWORD:postgres}
+      # Supabase gratis acepta pocas conexiones: 5 alcanzan para DOZZER
+      hikari:
+        maximum-pool-size: ${DB_POOL_SIZE:10}
+        minimum-idle: 1
 
     jpa:
       hibernate:
