@@ -1,0 +1,22 @@
+# Mantiene despierto el servidor gratuito de Render (se duerme tras 15 minutos sin uso
+# y el primer acceso tardaba casi un minuto). Visita /api/salud cada 10 minutos.
+# Es gratis en repositorios públicos. Para apagarlo: GitHub → Actions → este flujo → Disable workflow.
+name: Mantener despierto el servidor
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  despertar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Visitar /api/salud
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS --max-time 90 https://dozzer-api.onrender.com/api/salud; then exit 0; fi
+            sleep 20
+          done
+          echo "El servidor no respondió (puede estar publicándose una versión nueva)."
