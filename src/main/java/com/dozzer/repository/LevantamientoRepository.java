@@ -12,4 +12,6 @@ public interface LevantamientoRepository extends JpaRepository<Levantamiento, Lo
     List<Levantamiento> findAllByOrderByIdLevantamientoDesc();
 
     boolean existsByIdSedeAndEstado(Long idSede, String estado);
+
+    boolean existsByIdSedeAndAnioAndPeriodo(Long idSede, Integer anio, Integer periodo);
 }

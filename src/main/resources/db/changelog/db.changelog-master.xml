@@ -34,5 +34,6 @@
  <include file="db/changelog/changes/0027-notificaciones-push.xml"/>
  <include file="db/changelog/changes/0028-calibracion-encargados.xml"/>
  <include file="db/changelog/changes/0029-etiquetas.xml"/>
+ <include file="db/changelog/changes/0030-levantamiento-periodo.xml"/>
 
 </databaseChangeLog>

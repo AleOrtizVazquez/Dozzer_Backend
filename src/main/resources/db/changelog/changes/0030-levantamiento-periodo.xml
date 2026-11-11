@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- El inventario es semestral (manual de Zuno): un levantamiento por sede, año y semestre -->
+    <changeSet id="0030-levantamiento-periodo" author="dozzer">
+        <addColumn tableName="levantamientos">
+            <column name="periodo" type="INT"/>
+        </addColumn>
+        <sql>UPDATE levantamientos SET periodo = CASE WHEN EXTRACT(MONTH FROM fecha_inicio) &lt;= 6 THEN 1 ELSE 2 END WHERE periodo IS NULL</sql>
+        <addNotNullConstraint tableName="levantamientos" columnName="periodo" columnDataType="INT" defaultNullValue="1"/>
+        <addUniqueConstraint tableName="levantamientos" columnNames="id_sede, anio, periodo" constraintName="uk_levantamiento_sede_periodo"/>
+    </changeSet>
+
+</databaseChangeLog>

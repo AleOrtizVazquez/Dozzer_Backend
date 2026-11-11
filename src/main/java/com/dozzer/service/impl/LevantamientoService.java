@@ -208,6 +208,13 @@ public class LevantamientoService {
         Levantamiento l = new Levantamiento();
         l.setIdSede(idSede);
         l.setAnio(largo(datos.get("anio")) != null ? largo(datos.get("anio")).intValue() : inicio.getYear());
+        Long per = largo(datos.get("periodo"));
+        l.setPeriodo(per != null && (per == 1 || per == 2) ? per.intValue() : (inicio.getMonthValue() <= 6 ? 1 : 2));
+        // Candado: un inventario por sede, año y semestre
+        if (levantamientoRepository.existsByIdSedeAndAnioAndPeriodo(idSede, l.getAnio(), l.getPeriodo())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe el " + nombreInventario(l) + " de " + sede.getNombreSede()
+                    + ". Elige el otro semestre o, si está en curso y fue una prueba, elimínalo primero.");
+        }
         l.setEstado("EN_CURSO");
         l.setCiudad(limitar(texto(datos.get("ciudad")), 150));
         l.setDireccion(limitar(texto(datos.get("direccion")), 300));
@@ -225,7 +232,7 @@ public class LevantamientoService {
         Map<String, Object> acta = baseActa(l, sede, inicio);
         acta.put("tipo", "ACTA_INICIO");
         acta.put("idLevantamiento", l.getIdLevantamiento());
-        acta.put("titulo", "Acta de inicio · Inventario " + l.getAnio() + " · " + sede.getNombreSede());
+        acta.put("titulo", "Acta de inicio · " + nombreInventario(l) + " · " + sede.getNombreSede());
         Documento doc = documentoFormatoService.registrarActa("ACTA_INICIO", idSede, acta, u, l.getAnio());
         l.setIdDocumentoInicio(doc.getIdDocumento());
         levantamientoRepository.save(l);
@@ -465,6 +472,9 @@ public class LevantamientoService {
         if (!puedeAdministrar(u, l.getIdSede())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el administrador de la sede puede eliminarlo");
         }
+        if ("CERRADO".equals(l.getEstado())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Un inventario cerrado ya es oficial (actas y resguardos firmados) y no se puede eliminar");
+        }
         List<LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(id);
         List<String> fotos = new ArrayList<>();
         for (LevantamientoRegistro r : regs) {
@@ -501,7 +511,45 @@ public class LevantamientoService {
 
     // ===================== Cerrar (Acta de cierre) =====================
 
+    // Lo que se revisa antes de cerrar: pendientes y quién falta de firmar su resguardo
+    @Transactional(readOnly = true)
+    public Map<String, Object> resumenCierre(Long id) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarVer(u, l);
+        List<LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(id);
+        Map<Long, LevantamientoRegistro> porBien = regs.stream().collect(Collectors.toMap(LevantamientoRegistro::getIdBien, r -> r, (a, b) -> a));
+        int total = 0, revisados = 0, noEnc = 0;
+        Set<Long> personasConRevisados = new HashSet<>();
+        for (Bien b : bienesDeSede(l.getIdSede())) {
+            total++;
+            LevantamientoRegistro r = porBien.get(b.getIdBien());
+            if (r != null && REVISADO.equals(r.getEstatus())) { revisados++; if (idPersona(b) != null) personasConRevisados.add(idPersona(b)); }
+            if (r != null && NO_ENCONTRADO.equals(r.getEstatus())) noEnc++;
+        }
+        Set<Long> firmadas = new HashSet<>();
+        for (Documento d : documentoRepository.findByIdLevantamiento(id)) {
+            if ("RESGUARDO".equals(d.getTipo()) && d.getIdPersona() != null && d.getDatos() != null && d.getDatos().get("firma") != null) firmadas.add(d.getIdPersona());
+        }
+        List<String> sinFirma = personaRepository.findAllById(personasConRevisados).stream()
+                .filter(p -> !firmadas.contains(p.getIdPersona())).map(p -> texto(p.getNombreCompleto())).sorted().toList();
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("total", total);
+        r.put("revisados", revisados);
+        r.put("noEncontrados", noEnc);
+        r.put("pendientes", total - revisados - noEnc);
+        r.put("personas", personasConRevisados.size());
+        r.put("firmadas", personasConRevisados.stream().filter(firmadas::contains).count());
+        r.put("sinFirma", sinFirma);
+        r.put("participantes", l.getParticipantes() == null ? List.of() : l.getParticipantes());
+        return r;
+    }
+
     public Map<String, Object> cerrar(Long id) {
+        return cerrar(id, Map.of());
+    }
+
+    public Map<String, Object> cerrar(Long id, Map<String, Object> datos) {
         Usuario u = usuarioActual();
         Levantamiento l = buscar(id);
         if (!puedeAdministrar(u, l.getIdSede())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el administrador de la sede puede cerrarlo");
@@ -509,6 +557,19 @@ public class LevantamientoService {
         Sede sede = sedeRepository.findById(l.getIdSede()).orElseThrow();
         LocalDateTime cierre = LocalDateTime.now();
         Map<String, Object> acta = construirActaCierre(l, sede, cierre);
+        // Firmas de los participantes (en el mismo orden); quien no firma en pantalla firma en papel
+        if (datos.get("firmas") instanceof List<?> firmas && acta.get("participantes") instanceof List<?> ps) {
+            List<Map<String, Object>> conFirma = new ArrayList<>();
+            for (int i = 0; i < ps.size(); i++) {
+                Map<String, Object> p = new LinkedHashMap<>();
+                if (ps.get(i) instanceof Map<?, ?> m) m.forEach((k, v) -> p.put(String.valueOf(k), v));
+                String f = i < firmas.size() ? firmaValida(firmas.get(i), false, "") : null;
+                if (f != null) p.put("firma", f);
+                conFirma.add(p);
+            }
+            acta.put("participantes", conFirma);
+            acta.put("firmadoEnPantalla", conFirma.stream().anyMatch(p -> p.get("firma") != null));
+        }
 
         // El borrador del acta se vuelve definitivo (mismo folio); si no habia, se crea
         Documento doc = l.getIdDocumentoCierre() == null ? null : documentoRepository.findById(l.getIdDocumentoCierre()).orElse(null);
@@ -573,7 +634,7 @@ public class LevantamientoService {
 
         Map<String, Object> acta = baseActa(l, sede, cierre);
         acta.put("tipo", "ACTA_CIERRE");
-        acta.put("titulo", "Acta de cierre · Inventario " + l.getAnio() + " · " + sede.getNombreSede());
+        acta.put("titulo", "Acta de cierre · " + nombreInventario(l) + " · " + sede.getNombreSede());
         acta.put("resumen", porClasificacion.entrySet().stream()
                 .map(e -> Map.<String, Object>of("clasificacion", e.getKey(), "total", e.getValue())).toList());
         Map<String, Object> totales = new LinkedHashMap<>();
@@ -677,7 +738,7 @@ public class LevantamientoService {
         d.put("revision", "2");
         d.put("sede", sede.getNombreSede());
         d.put("anio", l.getAnio());
-        d.put("levantamiento", "Inventario " + l.getAnio() + " · " + sede.getNombreSede());
+        d.put("levantamiento", nombreInventario(l) + " · " + sede.getNombreSede());
         d.put("idLevantamiento", l.getIdLevantamiento());
         d.put("fecha", hoy.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
         Map<String, Object> persona = new LinkedHashMap<>();
@@ -810,7 +871,7 @@ public class LevantamientoService {
         Sede sede = sedeRepository.findById(l.getIdSede()).orElseThrow();
         Map<String, Object> d = new LinkedHashMap<>();
         d.put("tipo", "ACTA_CIERRE");
-        d.put("titulo", "Acta de cierre · Inventario " + l.getAnio() + " · " + sede.getNombreSede());
+        d.put("titulo", "Acta de cierre · " + nombreInventario(l) + " · " + sede.getNombreSede());
         d.put("sede", sede.getNombreSede());
         d.put("anio", l.getAnio());
         d.put("idLevantamiento", l.getIdLevantamiento());
@@ -849,6 +910,8 @@ public class LevantamientoService {
         a.put("anioFecha", fecha.getYear());
         a.put("hora", fecha.format(DateTimeFormatter.ofPattern("HH:mm")));
         a.put("participantes", l.getParticipantes() == null ? List.of() : l.getParticipantes());
+        a.put("periodo", l.getPeriodo());
+        a.put("periodoTexto", textoPeriodo(l.getPeriodo()));
         a.put("idLevantamiento", l.getIdLevantamiento());
         return a;
     }
@@ -859,6 +922,7 @@ public class LevantamientoService {
         m.put("idSede", l.getIdSede());
         m.put("sede", sedeRepository.findById(l.getIdSede()).map(Sede::getNombreSede).orElse(""));
         m.put("anio", l.getAnio());
+        m.put("periodo", l.getPeriodo());
         m.put("estado", l.getEstado());
         m.put("ciudad", l.getCiudad());
         m.put("direccion", l.getDireccion());
@@ -892,6 +956,15 @@ public class LevantamientoService {
                 .filter(b -> b.getUbicacion() != null && b.getUbicacion().getSede() != null
                         && idSede.equals(b.getUbicacion().getSede().getIdSede()))
                 .toList();
+    }
+
+    // "Inventario 2026-1" (semestre)
+    private static String nombreInventario(Levantamiento l) {
+        return "Inventario " + l.getAnio() + "-" + (l.getPeriodo() == null ? 1 : l.getPeriodo());
+    }
+
+    private static String textoPeriodo(Integer p) {
+        return p != null && p == 2 ? "segundo semestre (julio a diciembre)" : "primer semestre (enero a junio)";
     }
 
     private static long contar(List<LevantamientoRegistro> regs, String estatus) {

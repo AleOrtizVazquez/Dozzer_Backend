@@ -30,6 +30,10 @@ public class Levantamiento {
     @Column(name = "anio", nullable = false)
     private Integer anio;
 
+    // Semestre: 1 (enero-junio) o 2 (julio-diciembre). Uno por sede, año y semestre.
+    @Column(name = "periodo", nullable = false)
+    private Integer periodo = 1;
+
     // EN_CURSO o CERRADO
     @Column(name = "estado", nullable = false, length = 20)
     private String estado = "EN_CURSO";

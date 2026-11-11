@@ -118,8 +118,14 @@ public class LevantamientoController {
     }
 
     @PostMapping("/levantamientos/{id}/cerrar")
-    public Map<String, Object> cerrar(@PathVariable Long id) {
-        return service.cerrar(id);
+    public Map<String, Object> cerrar(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> datos) {
+        return service.cerrar(id, datos == null ? Map.of() : datos);
+    }
+
+    // Antes de cerrar: pendientes y resguardos sin firmar
+    @GetMapping("/levantamientos/{id}/cierre-resumen")
+    public Map<String, Object> resumenCierre(@PathVariable Long id) {
+        return service.resumenCierre(id);
     }
 
     @GetMapping("/bienes/{idBien}/foto")
