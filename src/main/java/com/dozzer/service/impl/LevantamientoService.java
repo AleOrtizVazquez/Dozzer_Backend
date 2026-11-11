@@ -33,6 +33,9 @@ public class LevantamientoService {
     @Autowired private FotoStorageService fotoStorage;
     @Autowired private DocumentoRepository documentoRepository;
     @Autowired private PersonaRepository personaRepository;
+    // TEMPORAL para pruebas: borrar inventarios cerrados (se apaga con PERMITIR_BORRAR_CERRADOS=false)
+    @org.springframework.beans.factory.annotation.Value("${app.levantamientos.permitir-borrar-cerrados:false}")
+    private boolean permitirBorrarCerrados;
     @Autowired private ClasificacionRepository clasificacionRepository;
     @Autowired private MarcaRepository marcaRepository;
 
@@ -472,7 +475,8 @@ public class LevantamientoService {
         if (!puedeAdministrar(u, l.getIdSede())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el administrador de la sede puede eliminarlo");
         }
-        if ("CERRADO".equals(l.getEstado())) {
+        boolean cerrado = "CERRADO".equals(l.getEstado());
+        if (cerrado && !permitirBorrarCerrados) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Un inventario cerrado ya es oficial (actas y resguardos firmados) y no se puede eliminar");
         }
         List<LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(id);
@@ -495,7 +499,17 @@ public class LevantamientoService {
             if (idDoc != null && docs.stream().noneMatch(d -> idDoc.equals(d.getIdDocumento())))
                 documentoRepository.findById(idDoc).ifPresent(docs::add);
         }
+        // Personas cuyo resguardo de este inventario se borra: su resguardo anterior vuelve a quedar vigente
+        Set<Long> personasResg = docs.stream().filter(d -> "RESGUARDO".equals(d.getTipo()) && d.getIdPersona() != null)
+                .map(Documento::getIdPersona).collect(Collectors.toSet());
         documentoRepository.deleteAll(docs);
+        documentoRepository.flush();
+        for (Long idPer : personasResg) {
+            if (!documentoRepository.findByTipoAndIdPersonaAndEstado("RESGUARDO", idPer, "VIGENTE").isEmpty()) continue;
+            documentoRepository.findByTipoAndIdPersonaAndEstado("RESGUARDO", idPer, "HISTORICO").stream()
+                    .max(Comparator.comparing(Documento::getIdDocumento))
+                    .ifPresent(d -> { d.setEstado("VIGENTE"); documentoRepository.save(d); });
+        }
         levantamientoRepository.delete(l);
 
         int fallidas = 0;
@@ -947,6 +961,7 @@ public class LevantamientoService {
         m.put("fotosNuevas", regs.stream().filter(r -> Boolean.TRUE.equals(r.getFotoTomada())).count());
         m.put("soyCapturista", u.getIdUsuario().equals(l.getIdUsuarioCapturista()));
         m.put("puedoAdministrar", puedeAdministrar(u, l.getIdSede()));
+        m.put("puedoBorrar", puedeAdministrar(u, l.getIdSede()) && ("EN_CURSO".equals(l.getEstado()) || permitirBorrarCerrados));
         m.put("almacenFotos", fotoStorage.destino());
         return m;
     }

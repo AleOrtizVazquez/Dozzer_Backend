@@ -70,6 +70,9 @@
       access-key: ${R2_ACCESS_KEY:}
       secret-key: ${R2_SECRET_KEY:}
       bucket: ${R2_BUCKET:dozzer-fotos}
+    levantamientos:
+      # TEMPORAL (pruebas): permite borrar inventarios ya cerrados. Al empezar en serio poner PERMITIR_BORRAR_CERRADOS=false
+      permitir-borrar-cerrados: ${PERMITIR_BORRAR_CERRADOS:true}
     fotos:
       carpeta-local: ${FOTOS_DIR:fotos-bienes}
       # false = si no hay Cloudinary ni R2, NO se aceptan fotos (nunca se guardan en local por accidente).
