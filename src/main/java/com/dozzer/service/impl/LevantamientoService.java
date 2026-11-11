@@ -631,18 +631,29 @@ public class LevantamientoService {
             if (persona == null) continue;
             Map<String, Object> datos = construirResguardo(l, sede, persona, bienes, revisados);
             Documento doc;
+            boolean firmado = false;
             if (existente.isPresent()) {
                 doc = existente.get();
+                Map<String, Object> previo = doc.getDatos() == null ? Map.of() : doc.getDatos();
                 datos.put("folio", doc.getFolio());
+                // La firma sigue valiendo solo si la lista de bienes y sus estados no cambiaron
+                if (previo.get("firma") != null) {
+                    if (Objects.equals(previo.get("huella"), datos.get("huella"))) {
+                        datos.put("firma", previo.get("firma"));
+                        firmado = true;
+                    } else {
+                        datos.put("requiereNuevaFirma", true);
+                    }
+                }
                 doc.setDatos(datos);
-                doc.setEstado(cerrado ? "VIGENTE" : "BORRADOR");
-                if (cerrado) doc.setFechaCreacion(LocalDateTime.now());
+                doc.setEstado(cerrado || firmado ? "VIGENTE" : "BORRADOR");
+                if (cerrado && !firmado) doc.setFechaCreacion(LocalDateTime.now());
                 documentoRepository.save(doc);
             } else {
                 doc = documentoFormatoService.registrarDocumentoInventario("RESGUARDO", l.getIdSede(), l.getIdLevantamiento(),
                         idPer, datos, u, l.getAnio(), cerrado ? "VIGENTE" : "BORRADOR");
             }
-            if (cerrado) {
+            if (cerrado || firmado) {
                 // El resguardo anterior de la persona queda como historico
                 for (Documento viejo : documentoRepository.findByTipoAndIdPersonaAndEstado("RESGUARDO", idPer, "VIGENTE")) {
                     if (!viejo.getIdDocumento().equals(doc.getIdDocumento())) {
@@ -694,9 +705,103 @@ public class LevantamientoService {
         });
         d.put("filas", filas);
         d.put("totalBienes", filas.size());
+        // Huella del contenido: si cambia, la firma deja de valer
+        d.put("huella", filas.stream().map(f -> f.get("clave") + "|" + f.get("estado")).collect(Collectors.joining(";")));
         d.put("recursosNombre", "Juan Carlos Zuno Muñiz");
         d.put("recursosCargo", "Jefe de recursos materiales");
         return d;
+    }
+
+    // Estado de cada persona en el levantamiento (para marcar quién ya firmó)
+    @Transactional(readOnly = true)
+    public Map<String, Object> estadoPersonas(Long id) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarVer(u, l);
+        Map<String, Object> r = new LinkedHashMap<>();
+        for (Documento d : documentoRepository.findByIdLevantamiento(id)) {
+            if (!"RESGUARDO".equals(d.getTipo()) || d.getIdPersona() == null) continue;
+            Map<String, Object> datos = d.getDatos() == null ? Map.of() : d.getDatos();
+            String estado;
+            if (datos.get("firma") instanceof Map<?, ?> f) estado = Boolean.FALSE.equals(f.get("conforme")) ? "CON_DIFERENCIAS" : "FIRMADO";
+            else estado = Boolean.TRUE.equals(datos.get("requiereNuevaFirma")) ? "REQUIERE_FIRMA" : "EN_PROCESO";
+            r.put(String.valueOf(d.getIdPersona()), Map.of("estado", estado, "idDocumento", d.getIdDocumento()));
+        }
+        return r;
+    }
+
+    // "Terminar con esta persona": los pendientes pueden quedar como no encontrados, se registra si está
+    // de acuerdo (o las diferencias) y se guardan las firmas del resguardante y del responsable.
+    public Map<String, Object> terminarPersona(Long id, Long idPersona, Map<String, Object> datos) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        validarCaptura(u, l);
+        if (idPersona == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica la persona");
+        boolean conforme = !Boolean.FALSE.equals(datos.get("conforme"));
+        String observaciones = limitar(texto(datos.get("observaciones")), 1000);
+        if (!conforme && observaciones.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe cuáles son las diferencias");
+        }
+        String firmaResguardante = firmaValida(datos.get("firmaResguardante"), conforme, "Falta la firma de la persona");
+        String firmaResponsable = firmaValida(datos.get("firmaResponsable"), true, "Falta la firma del responsable del inventario");
+
+        // Pendientes de la persona → no encontrados (si así se pidió)
+        if (Boolean.TRUE.equals(datos.get("marcarPendientes"))) {
+            Map<Long, LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(id).stream()
+                    .collect(Collectors.toMap(LevantamientoRegistro::getIdBien, r -> r, (a, b) -> a));
+            for (Bien b : bienesDeSede(l.getIdSede())) {
+                if (!idPersona.equals(idPersona(b))) continue;
+                LevantamientoRegistro r = regs.get(b.getIdBien());
+                if (r != null && !PENDIENTE.equals(r.getEstatus())) continue;
+                if (r == null) { r = new LevantamientoRegistro(); r.setIdLevantamiento(id); r.setIdBien(b.getIdBien()); r.setFotoTomada(false); }
+                r.setEstatus(NO_ENCONTRADO);
+                r.setRespuesta(null);
+                r.setFueraDeLugar(false);
+                r.setIdUsuario(u.getIdUsuario());
+                r.setFecha(LocalDateTime.now());
+                registroRepository.save(r);
+            }
+            registroRepository.flush();
+        }
+        actualizarResguardos(l, Collections.singleton(idPersona), u);
+        Documento doc = documentoRepository.findFirstByIdLevantamientoAndTipoAndIdPersona(id, "RESGUARDO", idPersona)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Esta persona no tiene bienes revisados: no hay resguardo que firmar"));
+
+        Map<String, Object> firma = new LinkedHashMap<>();
+        firma.put("conforme", conforme);
+        firma.put("observaciones", observaciones);
+        firma.put("resguardante", firmaResguardante);
+        firma.put("responsable", firmaResponsable);
+        firma.put("responsableNombre", nombre(u));
+        firma.put("fecha", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        Map<String, Object> d = new LinkedHashMap<>(doc.getDatos());
+        d.put("firma", firma);
+        d.remove("requiereNuevaFirma");
+        doc.setDatos(d);
+        doc.setEstado("VIGENTE");
+        documentoRepository.save(doc);
+        for (Documento viejo : documentoRepository.findByTipoAndIdPersonaAndEstado("RESGUARDO", idPersona, "VIGENTE")) {
+            if (!viejo.getIdDocumento().equals(doc.getIdDocumento())) { viejo.setEstado("HISTORICO"); documentoRepository.save(viejo); }
+        }
+        asegurarActaBorrador(l, u);
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("success", true);
+        r.put("idDocumento", doc.getIdDocumento());
+        r.put("estado", conforme ? "FIRMADO" : "CON_DIFERENCIAS");
+        return r;
+    }
+
+    // Firma dibujada en pantalla: imagen PNG en base64 de tamaño razonable
+    private static String firmaValida(Object v, boolean obligatoria, String mensaje) {
+        String s = v == null ? "" : String.valueOf(v);
+        if (s.isBlank()) {
+            if (obligatoria) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, mensaje);
+            return null;
+        }
+        if (!s.startsWith("data:image/png;base64,") || s.length() > 200_000 || !s.substring(22).matches("[A-Za-z0-9+/=]+")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La firma no es válida; vuelve a dibujarla");
+        }
+        return s;
     }
 
     // Acta de cierre en BORRADOR desde que empieza el levantamiento (sus datos se arman al abrirla)

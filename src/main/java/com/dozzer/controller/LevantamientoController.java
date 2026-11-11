@@ -64,6 +64,18 @@ public class LevantamientoController {
         }
     }
 
+    // Quién ya firmó su resguardo en este levantamiento
+    @GetMapping("/levantamientos/{id}/personas-estado")
+    public Map<String, Object> estadoPersonas(@PathVariable Long id) {
+        return service.estadoPersonas(id);
+    }
+
+    // Terminar con una persona: pendientes, conformidad y firmas
+    @PostMapping("/levantamientos/{id}/personas/{idPersona}/terminar")
+    public Map<String, Object> terminarPersona(@PathVariable Long id, @PathVariable Long idPersona, @RequestBody Map<String, Object> datos) {
+        return service.terminarPersona(id, idPersona, datos == null ? Map.of() : datos);
+    }
+
     // Palomita "No encontrado"
     @PostMapping("/levantamientos/{id}/no-encontrados")
     public Map<String, Object> noEncontrado(@PathVariable Long id, @RequestBody Map<String, Object> datos) {
