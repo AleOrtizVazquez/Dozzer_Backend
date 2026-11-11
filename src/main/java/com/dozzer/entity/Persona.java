@@ -40,4 +40,8 @@ public class Persona {
     @Column(name = "numero_empleado", length = 20)
     private String numeroEmpleado;
 
+    // Encargado de movimientos de inventario de su área (marcado en amarillo en PERSONAL DOZZER)
+    @Column(name = "es_encargado", nullable = false)
+    private Boolean esEncargado = false;
+
 }

@@ -205,6 +205,7 @@ public class CatalogoServiceImpl implements CatalogoService {
             p.setCorreo(correo != null ? correo.toLowerCase(Locale.ROOT) : null);
         }
         if(d.containsKey("numero_empleado")) p.setNumeroEmpleado(texto(d,"numero_empleado"));
+        if(d.containsKey("es_encargado")) p.setEsEncargado(Boolean.parseBoolean(String.valueOf(d.get("es_encargado"))));
         if(d.containsKey("id_puesto")) {
             Long id = numero(d,"id_puesto");
             p.setPuesto(id != null ? puestoRepository.getReferenceById(id) : null);
@@ -301,6 +302,7 @@ public class CatalogoServiceImpl implements CatalogoService {
         m.put("nombre_completo",p.getNombreCompleto());
         m.put("correo",p.getCorreo());
         m.put("numero_empleado",p.getNumeroEmpleado());
+        m.put("es_encargado",Boolean.TRUE.equals(p.getEsEncargado()));
         m.put("id_puesto",p.getPuesto() != null ? p.getPuesto().getIdPuesto() : null);
         m.put("nombre_puesto",p.getPuesto() != null ? p.getPuesto().getNombrePuesto() : null);
         m.put("id_sede",p.getSede() != null ? p.getSede().getIdSede() : null);

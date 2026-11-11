@@ -32,5 +32,6 @@
  <include file="db/changelog/changes/0025-sedes-direccion.xml"/>
  <include file="db/changelog/changes/0026-levantamiento-resguardos.xml"/>
  <include file="db/changelog/changes/0027-notificaciones-push.xml"/>
+ <include file="db/changelog/changes/0028-calibracion-encargados.xml"/>
 
 </databaseChangeLog>

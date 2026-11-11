@@ -90,6 +90,19 @@ public class Bien {
     @Column(name = "activo")
     private Boolean activo = true;
 
+    // Calibración (verde en el Excel original) y mantenimiento (azul), con la próxima fecha
+    @Column(name = "requiere_calibracion", nullable = false)
+    private Boolean requiereCalibracion = false;
+
+    @Column(name = "fecha_calibracion")
+    private LocalDate fechaCalibracion;
+
+    @Column(name = "requiere_mantenimiento", nullable = false)
+    private Boolean requiereMantenimiento = false;
+
+    @Column(name = "fecha_mantenimiento")
+    private LocalDate fechaMantenimiento;
+
     @Column(name = "fecha_actualizacion")
     private LocalDateTime fechaActualizacion;
 

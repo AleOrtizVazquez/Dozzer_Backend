@@ -513,6 +513,10 @@ public class BienServiceImpl implements BienService {
         d.put("idResponsableArea", b.getResponsableArea() != null ? b.getResponsableArea().getIdPersona() : null);
         d.put("idUsuarioDirecto", b.getUsuarioDirecto() != null ? b.getUsuarioDirecto().getIdPersona() : null);
         d.put("idUbicacion", b.getUbicacion() != null ? b.getUbicacion().getIdUbicacion() : null);
+        d.put("requiereCalibracion", Boolean.TRUE.equals(b.getRequiereCalibracion()));
+        d.put("fechaCalibracion", b.getFechaCalibracion() != null ? b.getFechaCalibracion().toString() : null);
+        d.put("requiereMantenimiento", Boolean.TRUE.equals(b.getRequiereMantenimiento()));
+        d.put("fechaMantenimiento", b.getFechaMantenimiento() != null ? b.getFechaMantenimiento().toString() : null);
         return d;
     }
 
@@ -553,6 +557,20 @@ public class BienServiceImpl implements BienService {
 
         Long idUbicacion = obtenerLong(datos,"idUbicacion");
         bien.setUbicacion(idUbicacion != null ? ubicacionRepository.getReferenceById(idUbicacion) : null);
+
+        // Calibración y mantenimiento: solo se tocan si vienen en los datos (solicitudes anteriores no los traen)
+        if (datos.containsKey("requiereCalibracion")) bien.setRequiereCalibracion(Boolean.parseBoolean(String.valueOf(datos.get("requiereCalibracion"))));
+        if (datos.containsKey("fechaCalibracion")) bien.setFechaCalibracion(fecha(datos.get("fechaCalibracion")));
+        if (datos.containsKey("requiereMantenimiento")) bien.setRequiereMantenimiento(Boolean.parseBoolean(String.valueOf(datos.get("requiereMantenimiento"))));
+        if (datos.containsKey("fechaMantenimiento")) bien.setFechaMantenimiento(fecha(datos.get("fechaMantenimiento")));
+        if (!Boolean.TRUE.equals(bien.getRequiereCalibracion())) bien.setFechaCalibracion(null);
+        if (!Boolean.TRUE.equals(bien.getRequiereMantenimiento())) bien.setFechaMantenimiento(null);
+    }
+
+    private static java.time.LocalDate fecha(Object v) {
+        if (v == null || String.valueOf(v).isBlank() || "null".equals(String.valueOf(v))) return null;
+        try { return java.time.LocalDate.parse(String.valueOf(v).trim().substring(0, 10)); }
+        catch (Exception e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fecha no válida: " + v); }
     }
 
     private Map<String,Object> convertirAMap(Bien bien) {
@@ -592,6 +610,10 @@ public class BienServiceImpl implements BienService {
         resultado.put("estado_fisico",bien.getEstadoFisico());
         resultado.put("fecha_alta",bien.getFechaAlta());
         resultado.put("activo",bien.getActivo());
+        resultado.put("requiere_calibracion",Boolean.TRUE.equals(bien.getRequiereCalibracion()));
+        resultado.put("fecha_calibracion",bien.getFechaCalibracion());
+        resultado.put("requiere_mantenimiento",Boolean.TRUE.equals(bien.getRequiereMantenimiento()));
+        resultado.put("fecha_mantenimiento",bien.getFechaMantenimiento());
         resultado.put("fecha_actualizacion",bien.getFechaActualizacion());
         resultado.put("id_usuario_registro",bien.getUsuarioRegistro() != null ? bien.getUsuarioRegistro().getIdUsuario() : null);
         return resultado;

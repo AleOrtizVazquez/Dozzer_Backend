@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Bienes que requieren calibración (verde en el Excel original) o mantenimiento (azul), con su próxima fecha.
+         Personas marcadas como encargado de movimientos de inventario de su área (amarillo en PERSONAL DOZZER). -->
+    <changeSet id="0028-calibracion-encargados" author="dozzer">
+        <addColumn tableName="bienes">
+            <column name="requiere_calibracion" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+            <column name="fecha_calibracion" type="DATE"/>
+            <column name="requiere_mantenimiento" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+            <column name="fecha_mantenimiento" type="DATE"/>
+        </addColumn>
+        <addColumn tableName="cat_personas">
+            <column name="es_encargado" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
