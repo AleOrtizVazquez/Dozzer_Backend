@@ -8,6 +8,10 @@ public interface BienService {
 
     List<Map<String, Object>> listarBienes();
 
+    Map<String, Object> subirFotoAlta(byte[] foto, String tipo);
+
+    Map<String, Object> cambiarFoto(Long idBien, byte[] foto, String tipo);
+
     Map<String, Object> obtenerBien(Long idBien);
 
     Map<String, Object> crearBien(Map<String, Object> datos);

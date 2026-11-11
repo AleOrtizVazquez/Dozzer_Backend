@@ -62,6 +62,49 @@ public class BienServiceImpl implements BienService {
         return resultado;
     }
 
+    private static final java.util.regex.Pattern FOTO_ALTA = java.util.regex.Pattern.compile("^(cld:v\\d+/)?[A-Za-z0-9_/-]{0,80}bienes/nuevo-[0-9a-f]{32}(\\.(jpg|png|webp))?$");
+
+    private void validarFoto(byte[] foto, String tipo) {
+        if (foto == null || foto.length == 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No llegó la foto");
+        if (foto.length > 8 * 1024 * 1024) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La foto es demasiado grande");
+        if (tipo == null || !tipo.startsWith("image/")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El archivo no es una imagen");
+    }
+
+    @Override
+    public Map<String,Object> subirFotoAlta(byte[] foto, String tipo) {
+        validarFoto(foto, tipo);
+        String llave = fotoStorage.guardar("bienes/nuevo-" + UUID.randomUUID().toString().replace("-", ""), foto, tipo);
+        Map<String,Object> r = new HashMap<>();
+        r.put("fotoKey", llave);
+        r.put("foto_mini", fotoStorage.urlMini(llave));
+        return r;
+    }
+
+    @Override
+    @Transactional
+    public Map<String,Object> cambiarFoto(Long idBien, byte[] foto, String tipo) {
+        validarFoto(foto, tipo);
+        Bien bien = buscarBienActivo(idBien);
+        validarAccesoSede(usuarioActual(), obtenerIdSede(bien));
+        String anterior = bien.getFotoKey();
+        String llave = fotoStorage.guardar("bienes/" + bien.getIdBien() + "-" + UUID.randomUUID().toString().substring(0, 8), foto, tipo);
+        bien.setFotoKey(llave);
+        bien.setFotoFecha(java.time.LocalDateTime.now());
+        bienRepository.save(bien);
+        if (anterior != null && !anterior.equals(llave)) fotoStorage.borrar(anterior);
+        return convertirAMap(bien);
+    }
+
+    // Solo se aceptan llaves que generó subirFotoAlta (nadie puede ligar fotos ajenas)
+    private void ponerFotoAlta(Bien bien, Map<String,Object> datos) {
+        Object k = datos == null ? null : datos.get("fotoKey");
+        if (k == null || k.toString().isBlank()) return;
+        String llave = k.toString().trim();
+        if (llave.length() > 300 || !FOTO_ALTA.matcher(llave).matches()) return;
+        bien.setFotoKey(llave);
+        bien.setFotoFecha(java.time.LocalDateTime.now());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Map<String,Object> obtenerBien(Long idBien) {
@@ -80,6 +123,7 @@ public class BienServiceImpl implements BienService {
         }
         Bien bien = new Bien();
         asignarDatos(bien,datos);
+        ponerFotoAlta(bien, datos);
         bien.setUsuarioRegistro(usuario);
         Bien guardado = bienRepository.saveAndFlush(bien);
         Map<String,Object> respuesta = convertirAMap(bienRepository.findById(guardado.getIdBien()).orElse(guardado));
@@ -360,6 +404,7 @@ public class BienServiceImpl implements BienService {
         if ("ALTA".equals(operacion)) {
             Bien nuevo = new Bien();
             asignarDatos(nuevo, datos);
+            ponerFotoAlta(nuevo, datos);
             nuevo.setUsuarioRegistro(solicitud.getUsuarioSolicitante());
             Bien guardado = bienRepository.save(nuevo);
             // Se liga a la solicitud para poder revocar el alta

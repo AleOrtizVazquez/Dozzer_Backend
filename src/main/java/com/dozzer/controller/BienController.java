@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,20 @@ public class BienController {
          @RequestBody Map<String, Object> datos) {
 
   return bienService.actualizarBien(id, datos);
+ }
+
+ // Foto para un alta nueva: se sube primero y su llave viaja con el registro (o con la solicitud)
+ @PostMapping(value = "/fotos", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+ @PreAuthorize("hasRole('ADMIN') or hasAuthority('BIENES_CREAR')")
+ public Map<String, Object> subirFotoAlta(@RequestParam MultipartFile foto) throws java.io.IOException {
+  return bienService.subirFotoAlta(foto.getBytes(), foto.getContentType());
+ }
+
+ // Tomar o cambiar la foto de un bien existente (administrador)
+ @PostMapping(value = "/{id}/foto", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+ @PreAuthorize("hasRole('ADMIN')")
+ public Map<String, Object> cambiarFoto(@PathVariable Long id, @RequestParam MultipartFile foto) throws java.io.IOException {
+  return bienService.cambiarFoto(id, foto.getBytes(), foto.getContentType());
  }
 
  // Dar de baja bien

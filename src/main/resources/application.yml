@@ -1,6 +1,11 @@
   server:
     # En Render se usa la variable PORT; en tu computadora, 8080
     port: ${PORT:8080}
+    # La lista de bienes es grande: comprimida pesa ~10 veces menos
+    compression:
+      enabled: true
+      mime-types: application/json
+      min-response-size: 2048
 
   spring:
     application:
@@ -29,6 +34,8 @@
       properties:
         hibernate:
           format_sql: true
+          # Trae marcas, personas, areas, etc. en lotes en vez de una consulta por cada una (lista de bienes rapida)
+          default_batch_fetch_size: 200
 
     liquibase:
       change-log: classpath:db/changelog/db.changelog-master.xml
