@@ -117,6 +117,11 @@ public class LevantamientoController {
         return service.eliminar(id);
     }
 
+    @PostMapping("/levantamientos/{id}/firmas-inicio")
+    public Map<String, Object> firmarActaInicio(@PathVariable Long id, @RequestBody Map<String, Object> datos) {
+        return service.firmarActaInicio(id, datos);
+    }
+
     @PostMapping("/levantamientos/{id}/cerrar")
     public Map<String, Object> cerrar(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> datos) {
         return service.cerrar(id, datos == null ? Map.of() : datos);

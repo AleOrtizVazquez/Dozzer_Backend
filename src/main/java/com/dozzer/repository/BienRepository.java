@@ -40,6 +40,11 @@ public interface BienRepository extends JpaRepository<Bien, Long> {
     );
 
     // Buscar bienes por ubicación
+    // Bienes de una sede directo en la base (antes se traian todos y se filtraban)
+    List<Bien> findByActivoTrueAndUbicacion_Sede_IdSedeOrderByIdBienDesc(Long idSede);
+
+    long countByActivoTrueAndUbicacion_Sede_IdSede(Long idSede);
+
     List<Bien> findByUbicacion_IdUbicacionAndActivoTrue(
             Long idUbicacion
     );

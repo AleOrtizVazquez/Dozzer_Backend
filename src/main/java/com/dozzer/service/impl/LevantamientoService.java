@@ -563,6 +563,36 @@ public class LevantamientoService {
         return cerrar(id, Map.of());
     }
 
+    // Firmas del acta de inicio, dibujadas en el celular (en el orden de los participantes; null = firma en papel)
+    public Map<String, Object> firmarActaInicio(Long id, Map<String, Object> datos) {
+        Usuario u = usuarioActual();
+        Levantamiento l = buscar(id);
+        if (!puedeAdministrar(u, l.getIdSede())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el administrador de la sede puede firmar el acta");
+        if (!"EN_CURSO".equals(l.getEstado())) throw new ResponseStatusException(HttpStatus.CONFLICT, "El inventario ya está cerrado");
+        Documento doc = l.getIdDocumentoInicio() == null ? null : documentoRepository.findById(l.getIdDocumentoInicio()).orElse(null);
+        if (doc == null || doc.getDatos() == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontró el acta de inicio");
+        Map<String, Object> acta = new LinkedHashMap<>(doc.getDatos());
+        if (datos.get("firmas") instanceof List<?> firmas && acta.get("participantes") instanceof List<?> ps) {
+            List<Map<String, Object>> conFirma = new ArrayList<>();
+            for (int i = 0; i < ps.size(); i++) {
+                Map<String, Object> p = new LinkedHashMap<>();
+                if (ps.get(i) instanceof Map<?, ?> m) m.forEach((k, v) -> p.put(String.valueOf(k), v));
+                p.remove("firma");
+                String f = i < firmas.size() ? firmaValida(firmas.get(i), false, "") : null;
+                if (f != null) p.put("firma", f);
+                conFirma.add(p);
+            }
+            acta.put("participantes", conFirma);
+            acta.put("firmadoEnPantalla", conFirma.stream().anyMatch(p -> p.get("firma") != null));
+        }
+        doc.setDatos(acta);
+        documentoRepository.save(doc);
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("idDocumentoInicio", doc.getIdDocumento());
+        r.put("inicioFirmado", Boolean.TRUE.equals(acta.get("firmadoEnPantalla")));
+        return r;
+    }
+
     public Map<String, Object> cerrar(Long id, Map<String, Object> datos) {
         Usuario u = usuarioActual();
         Levantamiento l = buscar(id);
@@ -949,7 +979,9 @@ public class LevantamientoService {
                 usuarioRepository.findById(l.getIdUsuarioCapturista()).map(LevantamientoService::nombre).orElse(""));
         m.put("idDocumentoInicio", l.getIdDocumentoInicio());
         m.put("idDocumentoCierre", l.getIdDocumentoCierre());
-        m.put("totalBienes", bienesDeSede(l.getIdSede()).size());
+        m.put("totalBienes", bienRepository.countByActivoTrueAndUbicacion_Sede_IdSede(l.getIdSede()));
+        m.put("inicioFirmado", l.getIdDocumentoInicio() != null && documentoRepository.findById(l.getIdDocumentoInicio())
+                .map(d -> d.getDatos() != null && Boolean.TRUE.equals(d.getDatos().get("firmadoEnPantalla"))).orElse(false));
         List<LevantamientoRegistro> regs = registroRepository.findByIdLevantamiento(l.getIdLevantamiento());
         m.put("capturados", contar(regs, REVISADO));
         m.put("noEncontrados", contar(regs, NO_ENCONTRADO));
@@ -967,10 +999,7 @@ public class LevantamientoService {
     }
 
     private List<Bien> bienesDeSede(Long idSede) {
-        return bienRepository.findByActivoTrueOrderByIdBienDesc().stream()
-                .filter(b -> b.getUbicacion() != null && b.getUbicacion().getSede() != null
-                        && idSede.equals(b.getUbicacion().getSede().getIdSede()))
-                .toList();
+        return bienRepository.findByActivoTrueAndUbicacion_Sede_IdSedeOrderByIdBienDesc(idSede);
     }
 
     // "Inventario 2026-1" (semestre)
