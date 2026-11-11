@@ -103,6 +103,10 @@ public class Bien {
     @Column(name = "fecha_mantenimiento")
     private LocalDate fechaMantenimiento;
 
+    // Código de la etiqueta QR pegada en el bien (DZ-000123); solo lo cambia EtiquetaService
+    @Column(name = "etiqueta", length = 20, unique = true)
+    private String etiqueta;
+
     @Column(name = "fecha_actualizacion")
     private LocalDateTime fechaActualizacion;
 

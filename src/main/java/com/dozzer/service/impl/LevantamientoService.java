@@ -96,6 +96,7 @@ public class LevantamientoService {
         m.put("id_persona", b.getUsuarioDirecto() != null ? b.getUsuarioDirecto().getIdPersona() : null);
         m.put("persona", b.getUsuarioDirecto() != null ? b.getUsuarioDirecto().getNombreCompleto() : null);
         m.put("codigo_qr", b.getCodigoQr());
+        m.put("etiqueta", b.getEtiqueta());
         m.put("tiene_foto", b.getFotoKey() != null);
         m.put("foto_mini", fotoStorage.urlMini(b.getFotoKey()));
         m.put("foto_url", fotoStorage.urlGrande(b.getFotoKey()));

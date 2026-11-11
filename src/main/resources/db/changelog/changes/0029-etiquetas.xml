@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Etiquetas QR en blanco: códigos consecutivos (DZ-000001...) que se imprimen sin datos
+         y se ligan al bien en el momento de pegarlas y escanearlas -->
+    <changeSet id="0029-etiquetas" author="dozzer">
+        <createTable tableName="etiquetas">
+            <column name="id_etiqueta" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="numero" type="INT"><constraints nullable="false" unique="true" uniqueConstraintName="uk_etiqueta_numero"/></column>
+            <column name="codigo" type="VARCHAR(20)"><constraints nullable="false" unique="true" uniqueConstraintName="uk_etiqueta_codigo"/></column>
+            <!-- LIBRE (impresa, sin pegar), ASIGNADA (pegada en un bien) o ANULADA (se dañó o se reemplazó) -->
+            <column name="estado" type="VARCHAR(15)" defaultValue="LIBRE"><constraints nullable="false"/></column>
+            <column name="id_bien" type="BIGINT"/>
+            <column name="lote" type="INT"/>
+            <column name="fecha_creacion" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="fecha_asignacion" type="TIMESTAMP"/>
+            <column name="id_usuario_asigno" type="BIGINT"/>
+        </createTable>
+        <createIndex tableName="etiquetas" indexName="ix_etiquetas_bien"><column name="id_bien"/></createIndex>
+
+        <addColumn tableName="bienes">
+            <column name="etiqueta" type="VARCHAR(20)"><constraints unique="true" uniqueConstraintName="uk_bienes_etiqueta"/></column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="0029-etiquetas-rls" author="dozzer" dbms="postgresql">
+        <sql splitStatements="false">
+            ALTER TABLE etiquetas ENABLE ROW LEVEL SECURITY;
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                    EXECUTE 'REVOKE ALL ON etiquetas FROM anon';
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    EXECUTE 'REVOKE ALL ON etiquetas FROM authenticated';
+                END IF;
+            END $$;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
