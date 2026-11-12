@@ -144,6 +144,8 @@ public class DocumentoFormatoService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listar(String tipo, Long idSolicitud, Long idBien) {
         return visibles().stream()
+                // Las requisiciones tienen su propia pestaña
+                .filter(doc -> !RequisicionService.TIPO.equals(doc.getTipo()) || RequisicionService.TIPO.equalsIgnoreCase(tipo))
                 .filter(doc -> tipo == null || tipo.isBlank() || tipo.equalsIgnoreCase(doc.getTipo())
                         || ("ACTAS".equalsIgnoreCase(tipo) && doc.getTipo() != null && doc.getTipo().startsWith("ACTA")))
                 .filter(doc -> idSolicitud == null || idSolicitud.equals(doc.getIdSolicitud()))

@@ -26,4 +26,10 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     java.util.Optional<Documento> findFirstByIdLevantamientoAndTipoAndIdPersona(Long idLevantamiento, String tipo, Long idPersona);
 
     List<Documento> findByTipoAndIdPersonaAndEstado(String tipo, Long idPersona, String estado);
+
+    List<Documento> findByTipoOrderByIdDocumentoDesc(String tipo);
+
+    long countByTipo(String tipo);
+
+    boolean existsByFolio(String folio);
 }
