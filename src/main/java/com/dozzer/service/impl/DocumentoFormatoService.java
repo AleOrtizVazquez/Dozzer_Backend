@@ -145,7 +145,9 @@ public class DocumentoFormatoService {
     public List<Map<String, Object>> listar(String tipo, Long idSolicitud, Long idBien) {
         return visibles().stream()
                 // Las requisiciones tienen su propia pestaña
-                .filter(doc -> !RequisicionService.TIPO.equals(doc.getTipo()) || RequisicionService.TIPO.equalsIgnoreCase(tipo))
+                // Requisiciones: solo ya autorizadas (las que van en trámite se ven en su pestaña)
+                .filter(doc -> !RequisicionService.TIPO.equals(doc.getTipo())
+                        || "AUTORIZADA".equals(doc.getEstado()) || "APROBADA".equals(doc.getEstado()))
                 .filter(doc -> tipo == null || tipo.isBlank() || tipo.equalsIgnoreCase(doc.getTipo())
                         || ("ACTAS".equalsIgnoreCase(tipo) && doc.getTipo() != null && doc.getTipo().startsWith("ACTA")))
                 .filter(doc -> idSolicitud == null || idSolicitud.equals(doc.getIdSolicitud()))
@@ -162,6 +164,8 @@ public class DocumentoFormatoService {
         r.put("BAJA", docs.stream().filter(d -> "BAJA".equals(d.getTipo())).count());
         r.put("ACTAS", docs.stream().filter(d -> d.getTipo() != null && d.getTipo().startsWith("ACTA")).count());
         r.put("RESGUARDO", docs.stream().filter(d -> "RESGUARDO".equals(d.getTipo())).count());
+        r.put("REQUISICION", docs.stream().filter(d -> RequisicionService.TIPO.equals(d.getTipo())
+                && ("AUTORIZADA".equals(d.getEstado()) || "APROBADA".equals(d.getEstado()))).count());
         return r;
     }
 
@@ -272,6 +276,19 @@ public class DocumentoFormatoService {
         }
         r.put("idLevantamiento", doc.getIdLevantamiento());
         r.put("idPersona", doc.getIdPersona());
+        if (RequisicionService.TIPO.equals(doc.getTipo())) {
+            Object nombres = d.get("nombres");
+            r.put("solicito", d.get("solicitante"));
+            r.put("autorizo", nombres instanceof Map<?, ?> nm ? nm.get("autorizo") : null);
+            r.put("clave", d.get("area"));
+            Object ps = d.get("partidas");
+            String desc = "";
+            if (ps instanceof List<?> l) desc = l.stream().filter(x -> x instanceof Map).limit(3)
+                    .map(x -> ((Map<?, ?>) x).get("descripcion") + " ×" + ((Map<?, ?>) x).get("cantidad"))
+                    .collect(Collectors.joining(", ")) + (l.size() > 3 ? " y " + (l.size() - 3) + " más" : "");
+            r.put("descripcion", desc);
+            return r;
+        }
         if ("RESGUARDO".equals(doc.getTipo())) {
             Object p = d.get("persona");
             String nombre = p instanceof Map<?, ?> pm && pm.get("nombre") != null ? String.valueOf(pm.get("nombre")) : "";

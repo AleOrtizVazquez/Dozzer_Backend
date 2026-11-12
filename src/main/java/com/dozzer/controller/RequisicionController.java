@@ -24,6 +24,10 @@ public class RequisicionController {
     @GetMapping("/mis-datos")
     public Map<String, Object> misDatos() { return service.misDatos(); }
 
+    // Listas desplegables del formulario
+    @GetMapping("/opciones")
+    public Map<String, Object> opciones() { return service.opciones(); }
+
     @GetMapping("/{id}")
     public Map<String, Object> obtener(@PathVariable Long id) { return service.obtener(id); }
 

@@ -4,7 +4,9 @@ import com.dozzer.entity.Documento;
 import com.dozzer.entity.Persona;
 import com.dozzer.entity.Sede;
 import com.dozzer.entity.Usuario;
+import com.dozzer.repository.DepartamentoRepository;
 import com.dozzer.repository.DocumentoRepository;
+import com.dozzer.repository.PuestoDepartamentoRepository;
 import com.dozzer.repository.SedeRepository;
 import com.dozzer.repository.UsuarioRepository;
 import org.slf4j.Logger;
@@ -37,6 +39,49 @@ public class RequisicionService {
     @Autowired private UsuarioRepository usuarioRepository;
     @Autowired private SedeRepository sedeRepository;
     @Autowired private PushService push;
+    @Autowired private DepartamentoRepository departamentoRepository;
+    @Autowired private PuestoDepartamentoRepository puestoRepository;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    // Clasificación del catálogo de bienes → categoría del formato FA-04-01-02
+    private static String categoriaDe(String clasificacion) {
+        String c = clasificacion == null ? "" : clasificacion.toUpperCase();
+        if (c.contains("COMPUTO") || c.contains("CÓMPUTO")) return "ECA";
+        if (c.contains("MOBILIARIO")) return "MEO";
+        if (c.contains("TRANSPORTE")) return "ET";
+        if (c.contains("MAQUINA") || c.contains("MÁQUINA")) return "ME";
+        if (c.contains("HERRAMIENTA")) return "H";
+        if (c.contains("MATERIAL") || c.contains("INSUMO")) return "MI";
+        if (c.contains("MERCANC")) return "AM";
+        return "O";
+    }
+
+    // Listas para el formulario: áreas, cargos y lo que ya existe en el inventario (agrupado por categoría)
+    @Transactional(readOnly = true)
+    public Map<String, Object> opciones() {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("areas", departamentoRepository.findAll().stream()
+                .filter(d -> !Boolean.FALSE.equals(d.getEstatus()) && d.getNombreDepartamento() != null)
+                .map(d -> d.getNombreDepartamento().trim()).filter(x -> !x.isBlank()).distinct().sorted().toList());
+        r.put("cargos", puestoRepository.findAll().stream()
+                .filter(p -> !Boolean.FALSE.equals(p.getEstatus()) && p.getNombrePuesto() != null && !p.getNombrePuesto().isBlank())
+                .map(p -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("nombre", p.getNombrePuesto().trim());
+                    m.put("area", p.getDepartamento() != null ? texto(p.getDepartamento().getNombreDepartamento()).trim() : "");
+                    return m;
+                })
+                .sorted(Comparator.comparing(m -> String.valueOf(m.get("nombre"))))
+                .toList());
+        Map<String, String> articulos = new TreeMap<>();
+        jdbc.query("select upper(trim(b.articulo)) a, c.nombre c, count(*) n from bienes b left join cat_clasificaciones c on c.id_clasificacion = b.id_clasificacion "
+                + "where b.articulo is not null and trim(b.articulo) <> '' group by 1, 2 order by 3 desc", rs -> {
+            String a = rs.getString("a");
+            if (a != null && !articulos.containsKey(a)) articulos.put(a, categoriaDe(rs.getString("c")));
+        });
+        r.put("articulos", articulos.entrySet().stream().map(e -> Map.of("n", e.getKey(), "c", e.getValue())).toList());
+        return r;
+    }
 
     // ---------- Consultas ----------
 
