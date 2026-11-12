@@ -32,6 +32,32 @@ public class UsuarioAdministracionService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    // Cuenta principal del sistema: nadie le quita el rol de administrador
+    @org.springframework.beans.factory.annotation.Value("${app.admin.email:admin@dozzer.com}")
+    private String correoPrincipal;
+
+    public Map<String, Object> cambiarAdministrador(Long idUsuario, boolean administrador) {
+        Usuario u = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+        String yo = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
+        if (u.getCorreo().equalsIgnoreCase(correoPrincipal.trim()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La cuenta principal siempre es administradora");
+        if (!administrador && u.getCorreo().equalsIgnoreCase(yo))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No puedes quitarte a ti mismo el rol de administrador");
+        Rol rol = rolRepository.findAll().stream()
+                .filter(r -> (administrador ? "ADMIN" : "EMPLEADO").equalsIgnoreCase(r.getNombre()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "No existe el rol"));
+        u.setRoles(new HashSet<>(Set.of(rol)));
+        // Administrador = todas las sedes (sin sede asignada). Si vuelve a ser empleado, recupera la sede de su ficha.
+        if (administrador) {
+            u.getSedes().clear();
+        } else if (u.getSedes().isEmpty() && u.getPersona() != null && u.getPersona().getSede() != null) {
+            u.getSedes().add(u.getPersona().getSede());
+        }
+        return mapear(usuarioRepository.save(u));
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listar() {
         return usuarioRepository.findAll()
@@ -145,6 +171,9 @@ public class UsuarioAdministracionService {
         resultado.put("idUsuario", usuario.getIdUsuario());
         resultado.put("correo", usuario.getCorreo());
         resultado.put("activo", usuario.getActivo());
+        resultado.put("nombre", usuario.getPersona() != null ? usuario.getPersona().getNombreCompleto() : null);
+        resultado.put("administrador", usuario.getRoles().stream().anyMatch(r -> "ADMIN".equalsIgnoreCase(r.getNombre())));
+        resultado.put("principal", correoPrincipal != null && usuario.getCorreo().equalsIgnoreCase(correoPrincipal.trim()));
 
         resultado.put(
                 "roles",

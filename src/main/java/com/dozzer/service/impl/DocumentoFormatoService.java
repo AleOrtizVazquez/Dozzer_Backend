@@ -179,6 +179,44 @@ public class DocumentoFormatoService {
         return r;
     }
 
+    private static final List<String> LUGARES_FIRMA = List.of("solicito", "autorizo", "valido");
+
+    public Map<String, Object> firmarFormato(Long idDocumento, Map<String, Object> datos) {
+        Documento doc = documentoRepository.findById(idDocumento)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento no encontrado"));
+        if (!puedeVer(doc)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes acceso a este documento");
+        if (!"ALTA".equals(doc.getTipo()) && !"BAJA".equals(doc.getTipo()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo los formatos de alta y baja se firman aquí");
+        if ("ANULADO".equals(doc.getEstado())) throw new ResponseStatusException(HttpStatus.CONFLICT, "El formato está anulado");
+        Map<String, Object> d = new LinkedHashMap<>(doc.getDatos() == null ? Map.of() : doc.getDatos());
+        Map<String, Object> firmas = new LinkedHashMap<>();
+        if (d.get("firmas") instanceof Map<?, ?> previas) previas.forEach((k, v) -> firmas.put(String.valueOf(k), v));
+        Object nuevas = datos == null ? null : datos.get("firmas");
+        if (nuevas instanceof Map<?, ?> m) {
+            for (String lugar : LUGARES_FIRMA) {
+                if (!m.containsKey(lugar)) continue;
+                String f = firmaValida(m.get(lugar));
+                if (f == null) firmas.remove(lugar); else firmas.put(lugar, f);
+            }
+        }
+        d.put("firmas", firmas);
+        doc.setDatos(d);
+        documentoRepository.save(doc);
+        Map<String, Object> r = resumen(doc);
+        r.put("datos", d);
+        return r;
+    }
+
+    // Firma dibujada en pantalla: PNG en base64 de tamaño razonable (vacía = firma en papel)
+    private static String firmaValida(Object v) {
+        String s = v == null ? "" : String.valueOf(v);
+        if (s.isBlank()) return null;
+        if (!s.startsWith("data:image/png;base64,") || s.length() > 200_000 || !s.substring(22).matches("[A-Za-z0-9+/=]+")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La firma no es válida; vuelve a dibujarla");
+        }
+        return s;
+    }
+
     // Admin sin sede asignada: todos. Admin/revisor con sedes: solo esas sedes. Empleado: solo los suyos.
     private List<Documento> visibles() {
         Alcance a = alcance();
@@ -225,6 +263,7 @@ public class DocumentoFormatoService {
         r.put("sede", d.get("sede"));
         r.put("solicito", d.get("solicito"));
         r.put("autorizo", d.get("autorizo"));
+        r.put("firmado", d.get("firmas") instanceof Map<?, ?> fm && !fm.isEmpty());
         if (d.get("titulo") != null) {
             r.put("clave", d.get("sede"));
             r.put("descripcion", d.get("titulo"));

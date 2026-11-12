@@ -32,6 +32,13 @@ public class UsuarioController {
         return usuarioAdministracionService.listar();
     }
 
+    // Hacer (o dejar de hacer) administrador a un usuario
+    @PutMapping("/{idUsuario}/administrador")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> cambiarAdministrador(@PathVariable Long idUsuario, @RequestBody Map<String, Object> datos) {
+        return usuarioAdministracionService.cambiarAdministrador(idUsuario, Boolean.TRUE.equals(datos.get("administrador")));
+    }
+
     // Crear usuario
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")

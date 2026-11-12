@@ -34,4 +34,11 @@ public class DocumentoController {
     public Map<String, Object> obtener(@PathVariable Long idDocumento) {
         return documentoFormatoService.obtener(idDocumento);
     }
+
+    // Firmas dibujadas en el celular para el formato de alta o baja (Solicitó, Autorizó, Validó)
+    @PostMapping("/{idDocumento:\\d+}/firmas")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> firmar(@PathVariable Long idDocumento, @RequestBody Map<String, Object> datos) {
+        return documentoFormatoService.firmarFormato(idDocumento, datos);
+    }
 }
