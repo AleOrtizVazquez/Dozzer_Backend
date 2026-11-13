@@ -2,3 +2,5 @@
 secretos.properties
 # Fotos locales de pruebas
 fotos-bienes/
+# Compilados de Maven: se regeneran en cada build
+target/
