@@ -21,6 +21,8 @@ public class BienServiceImpl implements BienService {
     @Autowired
     private BienRepository bienRepository;
     @Autowired
+    private ClaveBienService claveBienService;
+    @Autowired
     private FotoStorageService fotoStorage;
     @Autowired
     private ClasificacionRepository clasificacionRepository;
@@ -602,6 +604,11 @@ public class BienServiceImpl implements BienService {
 
         Long idUbicacion = obtenerLong(datos,"idUbicacion");
         bien.setUbicacion(idUbicacion != null ? ubicacionRepository.getReferenceById(idUbicacion) : null);
+
+        // Sin clave capturada: se genera sola con el prefijo de la sede
+        if (bien.getClave() == null || bien.getClave().isBlank()) {
+            bien.setClave(claveBienService.siguienteClave(bien.getUbicacion() != null ? bien.getUbicacion().getSede() : null));
+        }
 
         // Calibración y mantenimiento: solo se tocan si vienen en los datos (solicitudes anteriores no los traen)
         if (datos.containsKey("requiereCalibracion")) bien.setRequiereCalibracion(Boolean.parseBoolean(String.valueOf(datos.get("requiereCalibracion"))));

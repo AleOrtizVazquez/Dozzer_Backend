@@ -38,6 +38,7 @@ public class LevantamientoService {
     private boolean permitirBorrarCerrados;
     @Autowired private ClasificacionRepository clasificacionRepository;
     @Autowired private MarcaRepository marcaRepository;
+    @Autowired private ClaveBienService claveBienService;
 
     // Estatus de cada bien dentro del levantamiento
     public static final String PENDIENTE = "PENDIENTE";
@@ -449,20 +450,8 @@ public class LevantamientoService {
         return m;
     }
 
-    // Prefijo de la sede + el numero siguiente (ej. CE1839)
     private String siguienteClave(Sede sede) {
-        String prefijo = texto(sede.getPrefijoClave()).toUpperCase(MX);
-        if (prefijo.isBlank()) prefijo = "B";
-        int max = 0, digitos = 4;
-        for (Bien x : bienRepository.findByClaveStartingWithIgnoreCase(prefijo)) {
-            String resto = texto(x.getClave()).substring(prefijo.length());
-            if (!resto.matches("[0-9]{1,9}")) continue;
-            max = Math.max(max, Integer.parseInt(resto));
-            digitos = Math.max(digitos, resto.length());
-        }
-        String clave;
-        do { clave = prefijo + String.format("%0" + digitos + "d", ++max); } while (bienRepository.existsByClave(clave));
-        return clave;
+        return claveBienService.siguienteClave(sede);
     }
 
     // ===================== Eliminar =====================
