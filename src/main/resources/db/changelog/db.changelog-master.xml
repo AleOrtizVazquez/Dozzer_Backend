@@ -35,5 +35,6 @@
  <include file="db/changelog/changes/0028-calibracion-encargados.xml"/>
  <include file="db/changelog/changes/0029-etiquetas.xml"/>
  <include file="db/changelog/changes/0030-levantamiento-periodo.xml"/>
+ <include file="db/changelog/changes/0031-movimientos-bienes.xml"/>
 
 </databaseChangeLog>

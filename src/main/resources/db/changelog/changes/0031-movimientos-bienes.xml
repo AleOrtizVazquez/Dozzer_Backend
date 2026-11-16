@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Historial de movimientos de cada bien: cambios de ubicación/sede, responsable o usuario directo.
+         Se guardan los nombres tal como estaban en ese momento para que el historial no cambie si
+         después se renombra un área o una persona. -->
+    <changeSet id="0031-movimientos-bienes" author="dozzer">
+        <createTable tableName="bien_movimientos">
+            <column name="id_movimiento" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="id_bien" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="fecha" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <!-- MOVIMIENTO (acción Mover/Reasignar), EDICION (formulario), SOLICITUD (cambio autorizado), REVERSION -->
+            <column name="origen" type="VARCHAR(20)"><constraints nullable="false"/></column>
+            <column name="sede_anterior" type="VARCHAR(200)"/>
+            <column name="sede_nueva" type="VARCHAR(200)"/>
+            <column name="ubicacion_anterior" type="VARCHAR(200)"/>
+            <column name="ubicacion_nueva" type="VARCHAR(200)"/>
+            <column name="responsable_anterior" type="VARCHAR(200)"/>
+            <column name="responsable_nuevo" type="VARCHAR(200)"/>
+            <column name="usuario_anterior" type="VARCHAR(200)"/>
+            <column name="usuario_nuevo" type="VARCHAR(200)"/>
+            <column name="motivo" type="VARCHAR(500)"/>
+            <column name="id_usuario_registro" type="BIGINT"/>
+            <column name="registrado_por" type="VARCHAR(200)"/>
+            <column name="id_solicitud" type="BIGINT"/>
+        </createTable>
+        <createIndex tableName="bien_movimientos" indexName="ix_bien_movimientos_bien"><column name="id_bien"/><column name="fecha"/></createIndex>
+    </changeSet>
+
+    <changeSet id="0031-movimientos-bienes-rls" author="dozzer" dbms="postgresql">
+        <sql splitStatements="false">
+            ALTER TABLE bien_movimientos ENABLE ROW LEVEL SECURITY;
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                    EXECUTE 'REVOKE ALL ON bien_movimientos FROM anon';
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    EXECUTE 'REVOKE ALL ON bien_movimientos FROM authenticated';
+                END IF;
+            END $$;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

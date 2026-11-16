@@ -23,6 +23,8 @@ public class BienServiceImpl implements BienService {
     @Autowired
     private ClaveBienService claveBienService;
     @Autowired
+    private MovimientoBienService movimientoBienService;
+    @Autowired
     private FotoStorageService fotoStorage;
     @Autowired
     private ClasificacionRepository clasificacionRepository;
@@ -150,8 +152,72 @@ public class BienServiceImpl implements BienService {
         if (!esAdmin(usuario) && requiereAutorizacion("MODIFICACION")) {
             return registrarSolicitud("MODIFICACION", bien, datos, usuario, sedePropuesta);
         }
+        MovimientoBienService.Foto antes = movimientoBienService.foto(bien);
         asignarDatos(bien,datos);
-        return convertirAMap(bienRepository.save(bien));
+        Bien guardado = bienRepository.saveAndFlush(bien);
+        movimientoBienService.registrar(guardado, antes, "EDICION", null, usuario, null);
+        return convertirAMap(guardado);
+    }
+
+    @Override
+    public Map<String,Object> moverBienes(Map<String,Object> datos) {
+        Usuario usuario = usuarioActual();
+        Object idsCrudos = datos == null ? null : datos.get("ids");
+        List<Long> ids = new ArrayList<>();
+        if (idsCrudos instanceof Collection<?> c) {
+            for (Object o : c) {
+                try { ids.add(Long.valueOf(String.valueOf(o))); } catch (NumberFormatException ignored) { }
+            }
+        }
+        if (ids.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se indicó ningún bien");
+        if (ids.size() > 500) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Máximo 500 bienes por movimiento");
+        boolean cambiaUbic = datos.containsKey("idUbicacion") && datos.get("idUbicacion") != null;
+        boolean cambiaResp = datos.containsKey("idResponsableArea");
+        boolean cambiaUsr = datos.containsKey("idUsuarioDirecto");
+        if (!cambiaUbic && !cambiaResp && !cambiaUsr) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica la nueva ubicación o la persona");
+        }
+        String motivo = obtenerTexto(datos, "motivo");
+        boolean conAutorizacion = !esAdmin(usuario) && requiereAutorizacion("MODIFICACION");
+        int aplicados = 0, pendientes = 0;
+        for (Long id : ids) {
+            Bien bien = buscarBienActivo(id);
+            Long sedeActual = obtenerIdSede(bien);
+            validarAccesoSede(usuario, sedeActual);
+            Map<String,Object> nuevos = datosDesdeBien(bien);
+            if (cambiaUbic) nuevos.put("idUbicacion", datos.get("idUbicacion"));
+            if (cambiaResp) nuevos.put("idResponsableArea", datos.get("idResponsableArea"));
+            if (cambiaUsr) nuevos.put("idUsuarioDirecto", datos.get("idUsuarioDirecto"));
+            boolean conPersona = nuevos.get("idResponsableArea") != null || nuevos.get("idUsuarioDirecto") != null;
+            nuevos.put("estatusAsignacion", conPersona ? "ASIGNADO" : "SIN_ASIGNAR");
+            Long sedeNueva = obtenerIdSedeDesdeDatos(nuevos, sedeActual);
+            validarAccesoSede(usuario, sedeNueva);
+            if (conAutorizacion) {
+                if (motivo != null) nuevos.put("motivoSolicitud", motivo);
+                registrarSolicitud("MODIFICACION", bien, nuevos, usuario, sedeNueva);
+                pendientes++;
+                continue;
+            }
+            MovimientoBienService.Foto antes = movimientoBienService.foto(bien);
+            asignarDatos(bien, nuevos);
+            Bien guardado = bienRepository.saveAndFlush(bien);
+            movimientoBienService.registrar(guardado, antes, "MOVIMIENTO", motivo, usuario, null);
+            aplicados++;
+        }
+        Map<String,Object> r = new LinkedHashMap<>();
+        r.put("success", true);
+        r.put("aplicados", aplicados);
+        r.put("pendientes", pendientes);
+        return r;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String,Object>> movimientos(Long idBien) {
+        Bien bien = bienRepository.findById(idBien)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bien no encontrado"));
+        validarAccesoSede(usuarioActual(), obtenerIdSede(bien));
+        return movimientoBienService.listar(idBien);
     }
 
     @Override
@@ -420,8 +486,15 @@ public class BienServiceImpl implements BienService {
         if ("MODIFICACION".equals(operacion)) {
             // Copia de cómo estaba el bien, para poder revocar el cambio
             solicitud.setDatosAnteriores(datosDesdeBien(existente));
+            MovimientoBienService.Foto antes = movimientoBienService.foto(existente);
             asignarDatos(existente, datos);
-            return convertirAMap(bienRepository.save(existente));
+            Bien guardado = bienRepository.saveAndFlush(existente);
+            String motivoSol = solicitud.getMotivoSolicitud();
+            String quienPidio = solicitud.getUsuarioSolicitante() != null && solicitud.getUsuarioSolicitante().getPersona() != null
+                    ? solicitud.getUsuarioSolicitante().getPersona().getNombreCompleto() : null;
+            String nota = quienPidio != null ? "Solicitado por " + quienPidio + (motivoSol != null && !motivoSol.isBlank() ? ": " + motivoSol : "") : motivoSol;
+            movimientoBienService.registrar(guardado, antes, "SOLICITUD", nota, usuarioActual(), solicitud.getIdSolicitud());
+            return convertirAMap(guardado);
         }
         if ("BAJA".equals(operacion)) {
             existente.setActivo(false);
@@ -526,8 +599,10 @@ public class BienServiceImpl implements BienService {
             if (!Boolean.TRUE.equals(existente.getActivo())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "El bien ya fue dado de baja; no se puede revertir el cambio");
             }
+            MovimientoBienService.Foto antes = movimientoBienService.foto(existente);
             asignarDatos(existente, solicitud.getDatosAnteriores());
-            bienRepository.save(existente);
+            Bien revertido = bienRepository.saveAndFlush(existente);
+            movimientoBienService.registrar(revertido, antes, "REVERSION", "Se revocó un cambio autorizado", usuarioActual(), solicitud.getIdSolicitud());
             solicitud.setDatosAnteriores(null);
             return;
         }

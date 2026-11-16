@@ -42,6 +42,20 @@ public class BienController {
   return bienService.crearBien(datos);
  }
 
+ // Mover / reasignar uno o varios bienes
+ @PostMapping("/mover")
+ @PreAuthorize("hasRole('ADMIN') or hasAuthority('BIENES_MODIFICAR')")
+ public Map<String, Object> moverBienes(@RequestBody Map<String, Object> datos) {
+  return bienService.moverBienes(datos);
+ }
+
+ // Historial de movimientos de un bien
+ @GetMapping("/{id}/movimientos")
+ @PreAuthorize("hasRole('ADMIN') or hasAuthority('BIENES_CONSULTAR')")
+ public List<Map<String, Object>> movimientos(@PathVariable Long id) {
+  return bienService.movimientos(id);
+ }
+
  // Modificar bien
  @PutMapping("/{id}")
  @PreAuthorize("hasRole('ADMIN') or hasAuthority('BIENES_MODIFICAR')")
