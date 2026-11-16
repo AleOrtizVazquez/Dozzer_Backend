@@ -30,5 +30,7 @@ public interface BienService {
 
     List<Map<String,Object>> movimientos(Long idBien);
 
+    Map<String,Object> siguienteClave(Long idUbicacion);
+
 
 }

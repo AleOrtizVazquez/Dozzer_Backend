@@ -42,6 +42,13 @@ public class BienController {
   return bienService.crearBien(datos);
  }
 
+ // Clave que le tocará a un bien nuevo en esa ubicación (solo para mostrarla; se asigna al guardar)
+ @GetMapping("/siguiente-clave")
+ @PreAuthorize("hasRole('ADMIN') or hasAuthority('BIENES_CREAR')")
+ public Map<String, Object> siguienteClave(@RequestParam(required = false) Long idUbicacion) {
+  return bienService.siguienteClave(idUbicacion);
+ }
+
  // Mover / reasignar uno o varios bienes
  @PostMapping("/mover")
  @PreAuthorize("hasRole('ADMIN') or hasAuthority('BIENES_MODIFICAR')")

@@ -213,6 +213,20 @@ public class BienServiceImpl implements BienService {
 
     @Override
     @Transactional(readOnly = true)
+    public Map<String,Object> siguienteClave(Long idUbicacion) {
+        Sede sede = null;
+        if (idUbicacion != null) {
+            Ubicacion u = ubicacionRepository.findById(idUbicacion).orElse(null);
+            if (u != null) sede = u.getSede();
+        }
+        Map<String,Object> r = new LinkedHashMap<>();
+        r.put("clave", claveBienService.siguienteClave(sede));
+        r.put("conPrefijo", sede != null && sede.getPrefijoClave() != null && !sede.getPrefijoClave().isBlank());
+        return r;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Map<String,Object>> movimientos(Long idBien) {
         Bien bien = bienRepository.findById(idBien)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bien no encontrado"));
