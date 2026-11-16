@@ -102,6 +102,75 @@ public class DocumentoFormatoService {
         return documentoRepository.save(doc);
     }
 
+    // Transferencia: el bien (o varios) pasa a otra persona. Uno solo por movimiento, con todos los bienes.
+    public Documento registrarTransferencia(List<Bien> bienes, List<MovimientoBienService.Foto> antes, String motivo,
+                                            Usuario solicitante, Usuario autorizo, SolicitudBien solicitud) {
+        if (bienes == null || bienes.isEmpty()) return null;
+        Bien primero = bienes.get(0);
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("tipo", "TRANSFERENCIA");
+        d.put("folio", "");
+        String sede = primero.getUbicacion() != null && primero.getUbicacion().getSede() != null
+                ? primero.getUbicacion().getSede().getNombreSede() : "";
+        d.put("sede", sede);
+        LocalDateTime fecha = LocalDateTime.now();
+        d.put("fecha", fecha.format(FECHA).toUpperCase(new Locale("es", "MX")));
+
+        List<Map<String, Object>> filas = new ArrayList<>();
+        Set<String> entregan = new LinkedHashSet<>();
+        for (int i = 0; i < bienes.size(); i++) {
+            Bien b = bienes.get(i);
+            MovimientoBienService.Foto a = i < antes.size() ? antes.get(i) : null;
+            Map<String, Object> fila = new LinkedHashMap<>();
+            fila.put("inventario", texto(b.getClave()));
+            fila.put("descripcion", unir(" · ", b.getArticulo(), b.getMarca() != null ? b.getMarca().getNombreMarca() : null));
+            fila.put("modeloSerie", unir(" / ", b.getModelo(), b.getNumeroSerie()));
+            String quien = a == null ? "" : (a.responsable() != null ? a.responsable() : a.usuario() != null ? a.usuario() : "Sin asignar");
+            fila.put("origen", unir(" · ", a != null ? a.ubicacion() : null, quien));
+            filas.add(fila);
+            entregan.add(quien);
+        }
+        d.put("filas", filas);
+
+        String recibe = primero.getResponsableArea() != null ? primero.getResponsableArea().getNombreCompleto()
+                : primero.getUsuarioDirecto() != null ? primero.getUsuarioDirecto().getNombreCompleto() : "";
+        Map<String, Object> destino = new LinkedHashMap<>();
+        destino.put("ubicacion", primero.getUbicacion() != null ? primero.getUbicacion().getNombreArea() : "");
+        destino.put("sede", sede);
+        destino.put("responsable", primero.getResponsableArea() != null ? primero.getResponsableArea().getNombreCompleto() : "");
+        destino.put("usuario", primero.getUsuarioDirecto() != null ? primero.getUsuarioDirecto().getNombreCompleto() : "");
+        d.put("destino", destino);
+        entregan.remove("");
+        d.put("entrega", entregan.size() == 1 ? entregan.iterator().next() : entregan.isEmpty() ? "" : "Varios (ver tabla)");
+        d.put("recibe", recibe);
+
+        List<String> obs = new ArrayList<>();
+        if (motivo != null && !motivo.isBlank()) obs.add("Motivo: " + motivo.trim());
+        if (solicitud != null && solicitud.getMotivoResolucion() != null && !solicitud.getMotivoResolucion().isBlank())
+            obs.add("Comentario del administrador: " + solicitud.getMotivoResolucion().trim());
+        d.put("observaciones", String.join("\n", obs));
+        d.put("solicito", nombre(solicitante));
+        d.put("autorizo", nombre(autorizo));
+
+        Documento doc = new Documento();
+        doc.setTipo("TRANSFERENCIA");
+        doc.setEstado("VIGENTE");
+        doc.setIdSede(primero.getUbicacion() != null && primero.getUbicacion().getSede() != null ? primero.getUbicacion().getSede().getIdSede()
+                : solicitud != null ? solicitud.getIdSede() : null);
+        doc.setIdBien(bienes.size() == 1 ? primero.getIdBien() : null);
+        doc.setIdSolicitud(solicitud != null ? solicitud.getIdSolicitud() : null);
+        doc.setIdUsuarioSolicitante(solicitante != null ? solicitante.getIdUsuario() : null);
+        doc.setIdUsuarioAutorizo(autorizo != null ? autorizo.getIdUsuario() : null);
+        doc.setDatos(d);
+        documentoRepository.saveAndFlush(doc);
+        String folio = "T-" + String.valueOf(fecha.getYear()).substring(2) + "-" + String.format("%04d", doc.getIdDocumento());
+        doc.setFolio(folio);
+        Map<String, Object> conFolio = new LinkedHashMap<>(d);
+        conFolio.put("folio", folio);
+        doc.setDatos(conFolio);
+        return documentoRepository.save(doc);
+    }
+
     // Actas del inventario anual (inicio y cierre): datos ya armados por el levantamiento
     public Documento registrarActa(String tipo, Long idSede, Map<String, Object> datos, Usuario usuario, int anio) {
         Object idLev = datos.get("idLevantamiento");
@@ -164,6 +233,7 @@ public class DocumentoFormatoService {
         r.put("BAJA", docs.stream().filter(d -> "BAJA".equals(d.getTipo())).count());
         r.put("ACTAS", docs.stream().filter(d -> d.getTipo() != null && d.getTipo().startsWith("ACTA")).count());
         r.put("RESGUARDO", docs.stream().filter(d -> "RESGUARDO".equals(d.getTipo())).count());
+        r.put("TRANSFERENCIA", docs.stream().filter(d -> "TRANSFERENCIA".equals(d.getTipo())).count());
         r.put("REQUISICION", docs.stream().filter(d -> RequisicionService.TIPO.equals(d.getTipo())
                 && ("AUTORIZADA".equals(d.getEstado()) || "APROBADA".equals(d.getEstado()))).count());
         return r;
@@ -191,7 +261,7 @@ public class DocumentoFormatoService {
         Documento doc = documentoRepository.findById(idDocumento)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento no encontrado"));
         if (!puedeVer(doc)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes acceso a este documento");
-        if (!"ALTA".equals(doc.getTipo()) && !"BAJA".equals(doc.getTipo()))
+        if (!"ALTA".equals(doc.getTipo()) && !"BAJA".equals(doc.getTipo()) && !"TRANSFERENCIA".equals(doc.getTipo()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo los formatos de alta y baja se firman aquí");
         if ("ANULADO".equals(doc.getEstado())) throw new ResponseStatusException(HttpStatus.CONFLICT, "El formato está anulado");
         Map<String, Object> d = new LinkedHashMap<>(doc.getDatos() == null ? Map.of() : doc.getDatos());

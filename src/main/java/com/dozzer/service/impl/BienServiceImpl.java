@@ -125,6 +125,10 @@ public class BienServiceImpl implements BienService {
         if (!esAdmin(usuario) && requiereAutorizacion("ALTA")) {
             return registrarSolicitud("ALTA", null, datos, usuario, idSede);
         }
+        String claveEscrita = obtenerTexto(datos, "clave");
+        if (claveEscrita != null && !claveEscrita.isBlank() && bienRepository.existsByClave(claveEscrita.trim())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La clave " + claveEscrita.trim() + " ya existe; deja que se asigne sola o usa otra");
+        }
         Bien bien = new Bien();
         asignarDatos(bien,datos);
         ponerFotoAlta(bien, datos);
@@ -156,7 +160,12 @@ public class BienServiceImpl implements BienService {
         asignarDatos(bien,datos);
         Bien guardado = bienRepository.saveAndFlush(bien);
         movimientoBienService.registrar(guardado, antes, "EDICION", null, usuario, null);
-        return convertirAMap(guardado);
+        Map<String,Object> respuesta = convertirAMap(guardado);
+        if (movimientoBienService.cambioPersona(antes, movimientoBienService.foto(guardado))) {
+            Documento t = documentoFormatoService.registrarTransferencia(List.of(guardado), List.of(antes), null, usuario, usuario, null);
+            if (t != null) respuesta.put("idDocumento", t.getIdDocumento());
+        }
+        return respuesta;
     }
 
     @Override
@@ -180,6 +189,8 @@ public class BienServiceImpl implements BienService {
         String motivo = obtenerTexto(datos, "motivo");
         boolean conAutorizacion = !esAdmin(usuario) && requiereAutorizacion("MODIFICACION");
         int aplicados = 0, pendientes = 0;
+        List<Bien> transferidos = new ArrayList<>();
+        List<MovimientoBienService.Foto> fotosAntes = new ArrayList<>();
         for (Long id : ids) {
             Bien bien = buscarBienActivo(id);
             Long sedeActual = obtenerIdSede(bien);
@@ -202,9 +213,18 @@ public class BienServiceImpl implements BienService {
             asignarDatos(bien, nuevos);
             Bien guardado = bienRepository.saveAndFlush(bien);
             movimientoBienService.registrar(guardado, antes, "MOVIMIENTO", motivo, usuario, null);
+            if (movimientoBienService.cambioPersona(antes, movimientoBienService.foto(guardado))) {
+                transferidos.add(guardado);
+                fotosAntes.add(antes);
+            }
             aplicados++;
         }
         Map<String,Object> r = new LinkedHashMap<>();
+        if (!transferidos.isEmpty()) {
+            Documento t = documentoFormatoService.registrarTransferencia(transferidos, fotosAntes, motivo, usuario, usuario, null);
+            if (t != null) r.put("idDocumento", t.getIdDocumento());
+        }
+        r.put("transferidos", transferidos.size());
         r.put("success", true);
         r.put("aplicados", aplicados);
         r.put("pendientes", pendientes);
@@ -220,8 +240,14 @@ public class BienServiceImpl implements BienService {
             if (u != null) sede = u.getSede();
         }
         Map<String,Object> r = new LinkedHashMap<>();
-        r.put("clave", claveBienService.siguienteClave(sede));
-        r.put("conPrefijo", sede != null && sede.getPrefijoClave() != null && !sede.getPrefijoClave().isBlank());
+        String clave = claveBienService.siguienteClave(sede);
+        boolean conPrefijo = sede != null && sede.getPrefijoClave() != null && !sede.getPrefijoClave().isBlank();
+        String prefijo = conPrefijo ? sede.getPrefijoClave().trim().toUpperCase() : "B";
+        r.put("clave", clave);
+        r.put("conPrefijo", conPrefijo);
+        r.put("prefijo", prefijo);
+        r.put("numero", clave.length() > prefijo.length() ? clave.substring(prefijo.length()) : "");
+        r.put("sede", sede != null ? sede.getNombreSede() : null);
         return r;
     }
 
@@ -517,6 +543,10 @@ public class BienServiceImpl implements BienService {
                     ? solicitud.getUsuarioSolicitante().getPersona().getNombreCompleto() : null;
             String nota = quienPidio != null ? "Solicitado por " + quienPidio + (motivoSol != null && !motivoSol.isBlank() ? ": " + motivoSol : "") : motivoSol;
             movimientoBienService.registrar(guardado, antes, "SOLICITUD", nota, usuarioActual(), solicitud.getIdSolicitud());
+            if (movimientoBienService.cambioPersona(antes, movimientoBienService.foto(guardado))) {
+                documentoFormatoService.registrarTransferencia(List.of(guardado), List.of(antes), motivoSol,
+                        solicitud.getUsuarioSolicitante(), usuarioActual(), solicitud);
+            }
             return convertirAMap(guardado);
         }
         if ("BAJA".equals(operacion)) {

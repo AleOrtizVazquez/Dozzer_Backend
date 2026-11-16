@@ -57,6 +57,12 @@ public class MovimientoBienService {
                 recortar(motivo, 500), quien != null ? quien.getIdUsuario() : null, recortar(porQuien, 200), idSolicitud);
     }
 
+    // Cambió quién tiene el bien (responsable o usuario directo): eso es una transferencia con formato
+    public boolean cambioPersona(Foto antes, Foto despues) {
+        return antes != null && despues != null
+                && (!Objects.equals(antes.responsable(), despues.responsable()) || !Objects.equals(antes.usuario(), despues.usuario()));
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listar(Long idBien) {
         return jdbc.queryForList("select id_movimiento, fecha, origen, sede_anterior, sede_nueva, ubicacion_anterior, ubicacion_nueva, " +
