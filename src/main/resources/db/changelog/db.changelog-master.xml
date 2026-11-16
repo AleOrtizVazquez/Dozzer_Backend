@@ -37,5 +37,6 @@
  <include file="db/changelog/changes/0030-levantamiento-periodo.xml"/>
  <include file="db/changelog/changes/0031-movimientos-bienes.xml"/>
  <include file="db/changelog/changes/0032-usuario-firma.xml"/>
+ <include file="db/changelog/changes/0033-persona-firma.xml"/>
 
 </databaseChangeLog>

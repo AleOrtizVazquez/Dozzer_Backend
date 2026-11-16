@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Firma guardada de cada persona del catálogo (aunque no tenga usuario): se reutiliza en sus documentos -->
+    <changeSet id="0033-persona-firma" author="dozzer">
+        <addColumn tableName="cat_personas">
+            <column name="firma" type="TEXT"/>
+            <column name="firma_actualizada" type="TIMESTAMP"/>
+            <column name="firma_registrada_por" type="VARCHAR(180)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
