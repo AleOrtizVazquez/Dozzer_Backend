@@ -20,6 +20,9 @@ public interface BienService {
 
     Map<String, Object> eliminarBien(Long idBien);
 
+    // Baja con el motivo (dañado, extraviado, obsoleto…)
+    Map<String, Object> eliminarBien(Long idBien, String motivo);
+
     Map<String,Object> importarBienes(List<Map<String,Object>> filas);
 
     // Mover / reasignar uno o varios bienes (ubicación, responsable, usuario directo)

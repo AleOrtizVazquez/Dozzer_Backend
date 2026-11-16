@@ -83,8 +83,9 @@ public class BienController {
  // Dar de baja bien
  @DeleteMapping("/{id}")
  @PreAuthorize("hasRole('ADMIN') or hasAuthority('BIENES_ELIMINAR')")
- public Map<String, Object> eliminarBien(@PathVariable Long id) {
-  return bienService.eliminarBien(id);
+ public Map<String, Object> eliminarBien(@PathVariable Long id,
+                                         @RequestParam(required = false) String motivo) {
+  return bienService.eliminarBien(id, motivo);
  }
 
  // Importar bienes desde Excel

@@ -222,18 +222,27 @@ public class BienServiceImpl implements BienService {
 
     @Override
     public Map<String,Object> eliminarBien(Long idBien) {
+        return eliminarBien(idBien, null);
+    }
+
+    @Override
+    public Map<String,Object> eliminarBien(Long idBien, String motivo) {
+        String motivoBaja = motivo == null || motivo.isBlank() ? null
+                : (motivo.trim().length() > 500 ? motivo.trim().substring(0, 500) : motivo.trim());
         Usuario usuario = usuarioActual();
         Bien bien = buscarBienActivo(idBien);
         Long idSede = obtenerIdSede(bien);
         validarAccesoSede(usuario, idSede);
         if (!esAdmin(usuario) && requiereAutorizacion("BAJA")) {
-            return registrarSolicitud("BAJA", bien, Collections.emptyMap(), usuario, idSede);
+            Map<String,Object> datosBaja = new HashMap<>();
+            if (motivoBaja != null) datosBaja.put("motivoSolicitud", motivoBaja);
+            return registrarSolicitud("BAJA", bien, datosBaja, usuario, idSede);
         }
         bien.setActivo(false);
         bienRepository.save(bien);
         // Formato de baja registrado automáticamente
         Documento doc = documentoFormatoService.registrar("BAJA", bien, null, usuario, usuario,
-                "Baja registrada directamente por el administrador.");
+                "Baja registrada directamente por el administrador." + (motivoBaja != null ? " Motivo: " + motivoBaja : ""));
         Map<String,Object> respuesta = new HashMap<>();
         respuesta.put("success",true);
         respuesta.put("message","Bien eliminado correctamente");
