@@ -258,10 +258,11 @@ public class LevantamientoService {
         }
 
         boolean fotoNueva = false;
-        if (bien.getFotoKey() == null) {
-            if (foto == null || foto.length == 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este bien todavía no tiene foto: tómale una");
-            }
+        // Sin foto: es obligatoria. Con foto: se puede actualizar si se toma una nueva en el inventario.
+        if (bien.getFotoKey() == null && (foto == null || foto.length == 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Este bien todavía no tiene foto: tómale una");
+        }
+        if (foto != null && foto.length > 0) {
             if (foto.length > 8 * 1024 * 1024) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La foto es demasiado grande");
             String tipo = tipoFoto != null && tipoFoto.startsWith("image/") ? tipoFoto : "image/jpeg";
             String llave = fotoStorage.guardar("bienes/" + bien.getIdBien() + "-" + bien.getCodigoQr().substring(0, 8), foto, tipo);
