@@ -759,11 +759,15 @@ public class VehiculoService {
 
     public Map<String, Object> calificarRevision(Long idRevision, String calificacion) {
         soloAdmin();
-        if (!"OK".equals(calificacion) && !"FALSA".equals(calificacion)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Calificación no válida");
+        if (!Set.of("OK", "FALSA", "BIEN").contains(calificacion)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Calificación no válida");
         List<Map<String, Object>> l = jdbc.queryForList("select id_vehiculo from vehiculo_revisiones where id_revision = ?", idRevision);
         if (l.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe");
-        // Un reporte falso cuesta más que cualquier problema reportado
-        jdbc.update("update vehiculo_revisiones set calificacion = ?, puntos = case when ? = 'FALSA' then -30 else puntos end where id_revision = ?", calificacion, calificacion, idRevision);
+        // BIEN: +5 de reconocimiento. FALSA: un reporte falso cuesta más que cualquier problema reportado.
+        jdbc.update("update vehiculo_revisiones set puntos = case " +
+                        "when ? = 'FALSA' then -30 " +
+                        "when ? = 'BIEN' then (case when calificacion = 'FALSA' then 15 when calificacion = 'BIEN' then puntos else puntos + 5 end) " +
+                        "else (case when calificacion = 'FALSA' then 10 when calificacion = 'BIEN' then puntos - 5 else puntos end) end, " +
+                        "calificacion = ? where id_revision = ?", calificacion, calificacion, calificacion, idRevision);
         if ("FALSA".equals(calificacion)) evento(num(l.get(0).get("id_vehiculo")), "CONFIANZA", "Un Pit Stop se marcó como falso", nombreDe(usuarioActual()));
         return Map.of("success", true);
     }
