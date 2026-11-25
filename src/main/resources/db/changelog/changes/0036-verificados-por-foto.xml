@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- El inventario venía de un Excel sin fotos: un bien con foto se vio en persona.
+         Fecha: cuando se tomó la foto. Quién: el capturista del inventario que la tomó, o quien dio de alta el bien
+         si la foto se tomó ese mismo día. Solo toca los que aún no tienen verificación (no pisa lo de las etiquetas). -->
+    <changeSet id="0036-verificados-por-foto" author="dozzer">
+        <sql>
+            UPDATE bienes b
+               SET fecha_verificacion = COALESCE(b.foto_fecha, b.fecha_actualizacion, CURRENT_TIMESTAMP),
+                   verificado_por = LEFT(COALESCE(
+                       (SELECT COALESCE(p.nombre_completo, u.correo)
+                          FROM levantamiento_registros r
+                          JOIN usuarios u ON u.id_usuario = r.id_usuario
+                          LEFT JOIN cat_personas p ON p.id_persona = u.id_persona
+                         WHERE r.id_bien = b.id_bien AND r.foto_tomada = TRUE
+                         ORDER BY r.fecha DESC
+                         LIMIT 1),
+                       (SELECT COALESCE(p.nombre_completo, u.correo)
+                          FROM usuarios u
+                          LEFT JOIN cat_personas p ON p.id_persona = u.id_persona
+                         WHERE u.id_usuario = b.id_usuario_registro
+                           AND b.foto_fecha IS NOT NULL
+                           AND CAST(b.foto_fecha AS DATE) = b.fecha_alta),
+                       'Foto tomada antes de esta función'), 200)
+             WHERE b.foto_key IS NOT NULL
+               AND TRIM(b.foto_key) &lt;&gt; ''
+               AND b.fecha_verificacion IS NULL;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

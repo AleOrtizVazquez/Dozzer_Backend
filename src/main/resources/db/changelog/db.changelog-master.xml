@@ -40,5 +40,6 @@
  <include file="db/changelog/changes/0033-persona-firma.xml"/>
  <include file="db/changelog/changes/0034-bien-verificacion.xml"/>
  <include file="db/changelog/changes/0035-verificados-por-etiqueta.xml"/>
+ <include file="db/changelog/changes/0036-verificados-por-foto.xml"/>
 
 </databaseChangeLog>
