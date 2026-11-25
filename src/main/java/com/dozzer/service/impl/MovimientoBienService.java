@@ -57,6 +57,19 @@ public class MovimientoBienService {
                 recortar(motivo, 500), quien != null ? quien.getIdUsuario() : null, recortar(porQuien, 200), idSolicitud);
     }
 
+    // Nota en el historial sin cambio de lugar ni de persona (ej. baja durante la actualización del inventario)
+    public void registrarNota(Bien bien, String origen, String motivo, Usuario quien) {
+        if (bien == null || bien.getIdBien() == null) return;
+        String porQuien = null;
+        if (quien != null) {
+            porQuien = quien.getPersona() != null && quien.getPersona().getNombreCompleto() != null
+                    ? quien.getPersona().getNombreCompleto() : quien.getCorreo();
+        }
+        jdbc.update("insert into bien_movimientos (id_bien, fecha, origen, motivo, id_usuario_registro, registrado_por) values (?,?,?,?,?,?)",
+                bien.getIdBien(), Timestamp.valueOf(LocalDateTime.now()), origen, recortar(motivo, 500),
+                quien != null ? quien.getIdUsuario() : null, recortar(porQuien, 200));
+    }
+
     // Cambió quién tiene el bien (responsable o usuario directo): eso es una transferencia con formato
     public boolean cambioPersona(Foto antes, Foto despues) {
         return antes != null && despues != null

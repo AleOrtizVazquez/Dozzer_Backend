@@ -23,6 +23,8 @@ public class BienServiceImpl implements BienService {
     @Autowired
     private ClaveBienService claveBienService;
     @Autowired
+    private EtiquetaService etiquetaService;
+    @Autowired
     private MovimientoBienService movimientoBienService;
     @Autowired
     private FotoStorageService fotoStorage;
@@ -248,6 +250,147 @@ public class BienServiceImpl implements BienService {
         r.put("prefijo", prefijo);
         r.put("numero", clave.length() > prefijo.length() ? clave.substring(prefijo.length()) : "");
         r.put("sede", sede != null ? sede.getNombreSede() : null);
+        return r;
+    }
+
+    // ===================== Modo actualización (solo administrador, sin formatos) =====================
+    // El administrador recorre las áreas cotejando: confirma lo que está, da de alta lo nuevo y de baja lo que falta.
+    // Los movimientos quedan en el historial del bien, pero no se generan formatos de alta, baja ni transferencia.
+
+    private static final Set<String> ESTADOS_FISICOS = Set.of("BUENO", "REGULAR", "MALO");
+
+    private Usuario adminActual() {
+        Usuario usuario = usuarioActual();
+        if (!esAdmin(usuario)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo el administrador puede actualizar el inventario");
+        return usuario;
+    }
+
+    private Long ubicacionValida(Map<String,Object> datos) {
+        Long idUbicacion;
+        try { idUbicacion = obtenerLong(datos, "idUbicacion"); }
+        catch (NumberFormatException e) { idUbicacion = null; }
+        if (idUbicacion == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica el área donde estás");
+        if (!ubicacionRepository.existsById(idUbicacion)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El área no existe");
+        return idUbicacion;
+    }
+
+    private String estadoFisicoValido(Map<String,Object> datos) {
+        String e = obtenerTexto(datos, "estadoFisico");
+        if (e == null || e.isBlank()) return null;
+        String v = e.trim().toUpperCase();
+        if (!ESTADOS_FISICOS.contains(v)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Estado físico no válido");
+        return v;
+    }
+
+    private Long personaValida(Map<String,Object> datos, String campo) {
+        Long id;
+        try { id = obtenerLong(datos, campo); }
+        catch (NumberFormatException e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Persona no válida"); }
+        if (id != null && !personaRepository.existsById(id)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La persona no existe");
+        return id;
+    }
+
+    private String recortar(String s, int max) {
+        if (s == null) return null;
+        String t = s.trim();
+        if (t.isEmpty()) return null;
+        return t.length() > max ? t.substring(0, max) : t;
+    }
+
+    @Override
+    public Map<String,Object> actualizacionConfirmar(Map<String,Object> datos) {
+        Usuario usuario = adminActual();
+        if (datos == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan datos");
+        Long idBien;
+        try { idBien = obtenerLong(datos, "idBien"); }
+        catch (NumberFormatException e) { idBien = null; }
+        if (idBien == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica el bien");
+        Bien bien = buscarBienActivo(idBien);
+
+        Map<String,Object> nuevos = datosDesdeBien(bien);
+        nuevos.put("idUbicacion", ubicacionValida(datos));
+        String estado = estadoFisicoValido(datos);
+        if (estado != null) nuevos.put("estadoFisico", estado);
+        if (datos.containsKey("idUsuarioDirecto")) nuevos.put("idUsuarioDirecto", personaValida(datos, "idUsuarioDirecto"));
+        boolean conPersona = nuevos.get("idResponsableArea") != null || nuevos.get("idUsuarioDirecto") != null;
+        nuevos.put("estatusAsignacion", conPersona ? "ASIGNADO" : "SIN_ASIGNAR");
+
+        MovimientoBienService.Foto antes = movimientoBienService.foto(bien);
+        asignarDatos(bien, nuevos);
+        Bien guardado = bienRepository.saveAndFlush(bien);
+        movimientoBienService.registrar(guardado, antes, "ACTUALIZACION", "Actualización del inventario", usuario, null);
+
+        String etiqueta = obtenerTexto(datos, "etiqueta");
+        if (etiqueta != null && !etiqueta.isBlank() && (guardado.getEtiqueta() == null || guardado.getEtiqueta().isBlank())) {
+            etiquetaService.asignar(etiqueta, guardado.getIdBien(), false);
+        }
+        return convertirAMap(bienRepository.findById(guardado.getIdBien()).orElse(guardado));
+    }
+
+    @Override
+    public Map<String,Object> actualizacionAlta(Map<String,Object> datos, byte[] foto, String tipoFoto) {
+        Usuario usuario = adminActual();
+        if (datos == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan datos");
+        String articulo = recortar(obtenerTexto(datos, "articulo"), 200);
+        if (articulo == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe qué es el bien");
+        if (foto != null && foto.length > 0) validarFoto(foto, tipoFoto);
+
+        Map<String,Object> d = new HashMap<>();
+        d.put("articulo", articulo);
+        d.put("idUbicacion", ubicacionValida(datos));
+        d.put("estadoFisico", estadoFisicoValido(datos));
+        Long idPersona = personaValida(datos, "idUsuarioDirecto");
+        d.put("idUsuarioDirecto", idPersona);
+        d.put("estatusAsignacion", idPersona != null ? "ASIGNADO" : "SIN_ASIGNAR");
+        d.put("modelo", recortar(obtenerTexto(datos, "modelo"), 150));
+        d.put("numeroSerie", recortar(obtenerTexto(datos, "numeroSerie"), 150));
+        d.put("caracteristicas", recortar(obtenerTexto(datos, "caracteristicas"), 500));
+        try {
+            d.put("idClasificacion", obtenerLong(datos, "idClasificacion"));
+            d.put("idMarca", obtenerLong(datos, "idMarca"));
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Clasificación o marca no válida");
+        }
+        if (d.get("idClasificacion") != null && !clasificacionRepository.existsById((Long) d.get("idClasificacion"))) d.put("idClasificacion", null);
+        if (d.get("idMarca") != null && !marcaRepository.existsById((Long) d.get("idMarca"))) d.put("idMarca", null);
+
+        Bien bien = new Bien();
+        asignarDatos(bien, d);
+        bien.setUsuarioRegistro(usuario);
+        Bien guardado = bienRepository.saveAndFlush(bien);
+
+        String etiqueta = obtenerTexto(datos, "etiqueta");
+        if (etiqueta != null && !etiqueta.isBlank()) etiquetaService.asignar(etiqueta, guardado.getIdBien(), false);
+
+        // La foto se sube al final: si algo de arriba falla, no queda una foto suelta
+        if (foto != null && foto.length > 0) {
+            String llave = fotoStorage.guardar("bienes/" + guardado.getIdBien() + "-" + UUID.randomUUID().toString().substring(0, 8), foto, tipoFoto);
+            guardado.setFotoKey(llave);
+            guardado.setFotoFecha(java.time.LocalDateTime.now());
+            bienRepository.saveAndFlush(guardado);
+        }
+        movimientoBienService.registrarNota(guardado, "ALTA", "Alta durante la actualización del inventario", usuario);
+        return convertirAMap(bienRepository.findById(guardado.getIdBien()).orElse(guardado));
+    }
+
+    @Override
+    public Map<String,Object> actualizacionBaja(Map<String,Object> datos) {
+        Usuario usuario = adminActual();
+        if (datos == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan datos");
+        Long idBien;
+        try { idBien = obtenerLong(datos, "idBien"); }
+        catch (NumberFormatException e) { idBien = null; }
+        if (idBien == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Indica el bien");
+        Bien bien = bienRepository.findById(idBien)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No se encontró el bien"));
+        Map<String,Object> r = new LinkedHashMap<>();
+        r.put("success", true);
+        r.put("idBien", idBien);
+        if (!Boolean.TRUE.equals(bien.getActivo())) return r;   // ya estaba de baja (se reintentó desde el celular)
+        String motivo = recortar(obtenerTexto(datos, "motivo"), 500);
+        bien.setActivo(false);
+        bienRepository.saveAndFlush(bien);
+        movimientoBienService.registrarNota(bien, "BAJA", "Baja durante la actualización del inventario" + (motivo != null ? ": " + motivo : ""), usuario);
         return r;
     }
 

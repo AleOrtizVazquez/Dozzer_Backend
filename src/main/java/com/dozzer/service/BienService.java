@@ -32,5 +32,12 @@ public interface BienService {
 
     Map<String,Object> siguienteClave(Long idUbicacion);
 
+    // Modo actualización (solo administrador): cambios rápidos sin generar formatos
+    Map<String,Object> actualizacionConfirmar(Map<String,Object> datos);
+
+    Map<String,Object> actualizacionAlta(Map<String,Object> datos, byte[] foto, String tipoFoto);
+
+    Map<String,Object> actualizacionBaja(Map<String,Object> datos);
+
 
 }
