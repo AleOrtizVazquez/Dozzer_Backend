@@ -22,11 +22,16 @@ public class JwtService {
  }
 
  public String generate(String subject) {
+  return generate(subject, expiration);
+ }
+
+ // Sesión más larga (ej. responsables de vehículo: entran una vez en su celular)
+ public String generate(String subject, long milisegundos) {
   long now=System.currentTimeMillis();
   return Jwts.builder()
           .subject(subject)
           .issuedAt(new Date(now))
-          .expiration(new Date(now+expiration))
+          .expiration(new Date(now+milisegundos))
           .signWith(key)
           .compact();
  }

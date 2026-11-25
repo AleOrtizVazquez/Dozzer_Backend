@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- CONTROL VEHICULAR: parque vehicular, revisión semanal del responsable (Pit Stop), pendientes de taller e historial.
+         Es un bloque aparte: no toca ninguna tabla de bienes. -->
+    <changeSet id="0037-vehiculos" author="dozzer">
+        <createTable tableName="vehiculos">
+            <column name="id_vehiculo" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="consecutivo" type="VARCHAR(30)"/>
+            <column name="marca" type="VARCHAR(60)"/>
+            <column name="modelo" type="VARCHAR(80)"/>
+            <column name="anio" type="INT"/>
+            <column name="color" type="VARCHAR(40)"/>
+            <column name="placas" type="VARCHAR(20)"><constraints nullable="false" unique="true" uniqueConstraintName="uk_vehiculos_placas"/></column>
+            <column name="numero_serie" type="VARCHAR(40)"/>
+            <column name="tarjeta_circulacion" type="VARCHAR(40)"/>
+            <column name="numero_economico" type="VARCHAR(20)"/>
+            <column name="estado" type="VARCHAR(80)"/>
+            <column name="id_sede" type="BIGINT"/>
+            <column name="sede_nombre" type="VARCHAR(150)"/>
+            <column name="id_persona_responsable" type="BIGINT"/>
+            <column name="responsable_nombre" type="VARCHAR(180)"/>
+            <column name="poliza_numero" type="VARCHAR(60)"/>
+            <column name="aseguradora" type="VARCHAR(80)"/>
+            <column name="poliza_inicio" type="DATE"/>
+            <column name="poliza_vigencia" type="DATE"/>
+            <column name="tenencia_anio" type="INT"/>
+            <column name="holograma" type="VARCHAR(20)"/>
+            <column name="verifica_sem1" type="VARCHAR(20)"/>
+            <column name="verifica_sem2" type="VARCHAR(20)"/>
+            <column name="proxima_verificacion" type="DATE"/>
+            <column name="km_actual" type="INT"/>
+            <column name="km_fecha" type="TIMESTAMP"/>
+            <column name="servicio_km" type="INT"/>
+            <column name="servicio_fecha" type="DATE"/>
+            <column name="servicio_cada_km" type="INT" defaultValueNumeric="10000"><constraints nullable="false"/></column>
+            <column name="servicio_cada_meses" type="INT" defaultValueNumeric="6"><constraints nullable="false"/></column>
+            <column name="codigo_qr" type="VARCHAR(40)"><constraints nullable="false" unique="true" uniqueConstraintName="uk_vehiculos_qr"/></column>
+            <column name="notas" type="VARCHAR(500)"/>
+            <column name="activo" type="BOOLEAN" defaultValueBoolean="true"><constraints nullable="false"/></column>
+            <column name="fecha_creacion" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="fecha_actualizacion" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="vehiculos" indexName="ix_vehiculos_responsable"><column name="id_persona_responsable"/></createIndex>
+
+        <!-- Pit Stop semanal del responsable. "datos" guarda llantas, luces, niveles, testigos y golpes (JSON). -->
+        <createTable tableName="vehiculo_revisiones">
+            <column name="id_revision" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="id_vehiculo" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="id_usuario" type="BIGINT"/>
+            <column name="id_persona" type="BIGINT"/>
+            <column name="quien" type="VARCHAR(180)"/>
+            <column name="fecha" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="semana" type="VARCHAR(10)"><constraints nullable="false"/></column>
+            <column name="km" type="INT"><constraints nullable="false"/></column>
+            <column name="km_recorridos" type="INT"/>
+            <column name="datos" type="TEXT"/>
+            <column name="problemas" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="salud" type="INT"/>
+            <column name="segundos" type="INT"/>
+            <column name="puntos" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="sospecha" type="VARCHAR(300)"/>
+            <!-- REVISAR (sospechosa sin decidir), OK, FALSA -->
+            <column name="calificacion" type="VARCHAR(10)"/>
+            <column name="contradicha" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+            <column name="foto_key" type="VARCHAR(300)"/>
+        </createTable>
+        <createIndex tableName="vehiculo_revisiones" indexName="ix_veh_rev_vehiculo"><column name="id_vehiculo"/><column name="fecha"/></createIndex>
+        <createIndex tableName="vehiculo_revisiones" indexName="ix_veh_rev_persona"><column name="id_persona"/></createIndex>
+
+        <!-- Problemas reportados y servicios: ABIERTO, EN_TALLER, RESUELTO, DESCARTADO -->
+        <createTable tableName="vehiculo_pendientes">
+            <column name="id_pendiente" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="id_vehiculo" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="tipo" type="VARCHAR(20)"><constraints nullable="false"/></column>
+            <column name="titulo" type="VARCHAR(200)"><constraints nullable="false"/></column>
+            <column name="detalle" type="VARCHAR(500)"/>
+            <column name="estado" type="VARCHAR(20)"><constraints nullable="false"/></column>
+            <column name="id_revision" type="BIGINT"/>
+            <column name="trabajos" type="VARCHAR(300)"/>
+            <column name="km" type="INT"/>
+            <column name="fecha_creacion" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="fecha_actualizacion" type="TIMESTAMP"/>
+            <column name="atendio" type="VARCHAR(180)"/>
+        </createTable>
+        <createIndex tableName="vehiculo_pendientes" indexName="ix_veh_pend_vehiculo"><column name="id_vehiculo"/></createIndex>
+
+        <!-- Historial: renovaciones, servicios, cambios de responsable, reportes falsos… -->
+        <createTable tableName="vehiculo_historial">
+            <column name="id_evento" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="id_vehiculo" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="fecha" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="tipo" type="VARCHAR(30)"><constraints nullable="false"/></column>
+            <column name="texto" type="VARCHAR(500)"><constraints nullable="false"/></column>
+            <column name="quien" type="VARCHAR(180)"/>
+        </createTable>
+        <createIndex tableName="vehiculo_historial" indexName="ix_veh_hist_vehiculo"><column name="id_vehiculo"/><column name="fecha"/></createIndex>
+
+        <!-- Avisos que el administrador pospuso ("recordar después") -->
+        <createTable tableName="vehiculo_pospuestos">
+            <column name="id_vehiculo" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="clave" type="VARCHAR(40)"><constraints nullable="false"/></column>
+            <column name="hasta" type="DATE"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey tableName="vehiculo_pospuestos" columnNames="id_vehiculo, clave" constraintName="pk_vehiculo_pospuestos"/>
+
+        <!-- Quien administra la flota sin ser administrador de todo DOZZER -->
+        <insert tableName="permisos">
+            <column name="codigo" value="VEHICULOS_ADMINISTRAR"/>
+            <column name="nombre" value="Administrar flota"/>
+            <column name="descripcion" value="Control vehicular: vehículos, vencimientos, reportes y taller"/>
+        </insert>
+        <insert tableName="roles"><column name="nombre" value="FLOTA"/></insert>
+        <sql>
+            INSERT INTO rol_permisos (id_rol, id_permiso)
+            SELECT r.id, p.id_permiso FROM roles r CROSS JOIN permisos p
+             WHERE r.nombre IN ('FLOTA', 'ADMIN') AND p.codigo = 'VEHICULOS_ADMINISTRAR'
+               AND NOT EXISTS (SELECT 1 FROM rol_permisos x WHERE x.id_rol = r.id AND x.id_permiso = p.id_permiso);
+        </sql>
+    </changeSet>
+
+    <changeSet id="0037-vehiculos-rls" author="dozzer" dbms="postgresql">
+        <sql splitStatements="false">
+            DO $$
+            DECLARE t TEXT;
+            BEGIN
+                FOREACH t IN ARRAY ARRAY['vehiculos','vehiculo_revisiones','vehiculo_pendientes','vehiculo_historial','vehiculo_pospuestos'] LOOP
+                    EXECUTE 'ALTER TABLE ' || t || ' ENABLE ROW LEVEL SECURITY';
+                    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                        EXECUTE 'REVOKE ALL ON ' || t || ' FROM anon';
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                        EXECUTE 'REVOKE ALL ON ' || t || ' FROM authenticated';
+                    END IF;
+                END LOOP;
+            END $$;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

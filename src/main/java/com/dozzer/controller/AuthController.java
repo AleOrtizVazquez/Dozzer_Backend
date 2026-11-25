@@ -32,6 +32,9 @@ public class AuthController {
  @Autowired
  private PasswordEncoder passwordEncoder;
 
+ @Autowired
+ private com.dozzer.service.impl.VehiculoService vehiculoService;
+
  @PostMapping("/login")
  @Transactional(readOnly = true)
  public Map<String,Object> login(@RequestBody LoginRequest req) {
@@ -40,7 +43,9 @@ public class AuthController {
            new UsernamePasswordAuthenticationToken(req.correo(),req.password())
    );
 
-   String token = jwt.generate(auth.getName());
+   // Quien maneja un vehículo o administra la flota no tiene que entrar a cada rato: 60 días en su celular
+   boolean flota = usuarioRepository.findByCorreoIgnoreCase(auth.getName()).map(vehiculoService::usaFlota).orElse(false);
+   String token = flota ? jwt.generate(auth.getName(), 60L * 24 * 3600 * 1000) : jwt.generate(auth.getName());
 
    List<String> roles = auth.getAuthorities().stream()
            .map(a -> a.getAuthority())
