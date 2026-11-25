@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Última vez que alguien vio físicamente el bien (se llena solo en Actualizar inventario) -->
+    <changeSet id="0034-bien-verificacion" author="dozzer">
+        <addColumn tableName="bienes">
+            <column name="fecha_verificacion" type="TIMESTAMP"/>
+            <column name="verificado_por" type="VARCHAR(200)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

@@ -110,6 +110,13 @@ public class Bien {
     @Column(name = "fecha_actualizacion")
     private LocalDateTime fechaActualizacion;
 
+    // Última vez que alguien vio físicamente el bien (Actualizar inventario)
+    @Column(name = "fecha_verificacion")
+    private LocalDateTime fechaVerificacion;
+
+    @Column(name = "verificado_por", length = 200)
+    private String verificadoPor;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_usuario_registro")
     private Usuario usuarioRegistro;

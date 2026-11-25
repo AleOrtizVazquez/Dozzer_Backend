@@ -290,6 +290,14 @@ public class BienServiceImpl implements BienService {
         return id;
     }
 
+    // Se marca solo: cuándo y quién vio el bien en su lugar
+    private void marcarVerificado(Bien bien, Usuario usuario) {
+        bien.setFechaVerificacion(java.time.LocalDateTime.now());
+        String quien = usuario.getPersona() != null && usuario.getPersona().getNombreCompleto() != null
+                ? usuario.getPersona().getNombreCompleto() : usuario.getCorreo();
+        bien.setVerificadoPor(recortar(quien, 200));
+    }
+
     private String recortar(String s, int max) {
         if (s == null) return null;
         String t = s.trim();
@@ -317,6 +325,7 @@ public class BienServiceImpl implements BienService {
 
         MovimientoBienService.Foto antes = movimientoBienService.foto(bien);
         asignarDatos(bien, nuevos);
+        marcarVerificado(bien, usuario);
         Bien guardado = bienRepository.saveAndFlush(bien);
         movimientoBienService.registrar(guardado, antes, "ACTUALIZACION", "Actualización del inventario", usuario, null);
 
@@ -357,6 +366,7 @@ public class BienServiceImpl implements BienService {
         Bien bien = new Bien();
         asignarDatos(bien, d);
         bien.setUsuarioRegistro(usuario);
+        marcarVerificado(bien, usuario);
         Bien guardado = bienRepository.saveAndFlush(bien);
 
         String etiqueta = obtenerTexto(datos, "etiqueta");
@@ -939,6 +949,8 @@ public class BienServiceImpl implements BienService {
         resultado.put("requiere_mantenimiento",Boolean.TRUE.equals(bien.getRequiereMantenimiento()));
         resultado.put("fecha_mantenimiento",bien.getFechaMantenimiento());
         resultado.put("fecha_actualizacion",bien.getFechaActualizacion());
+        resultado.put("fecha_verificacion",bien.getFechaVerificacion());
+        resultado.put("verificado_por",bien.getVerificadoPor());
         resultado.put("id_usuario_registro",bien.getUsuarioRegistro() != null ? bien.getUsuarioRegistro().getIdUsuario() : null);
         return resultado;
     }
