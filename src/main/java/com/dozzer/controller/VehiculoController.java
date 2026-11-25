@@ -29,6 +29,12 @@ public class VehiculoController {
     @GetMapping("/podio")
     public Map<String, Object> podio() { return service.podio(); }
 
+    @PostMapping("/mi-persona")
+    public Map<String, Object> ligarMiPersona(@RequestBody Map<String, Object> d) {
+        Object p = d == null ? null : d.get("idPersona");
+        return service.ligarMiPersona(p == null || String.valueOf(p).isBlank() ? null : Long.valueOf(String.valueOf(p)));
+    }
+
     @GetMapping("/qr/{codigo}")
     public Map<String, Object> porQr(@PathVariable String codigo) { return service.porQr(codigo); }
 

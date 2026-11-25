@@ -124,7 +124,21 @@ public class VehiculoService {
         r.put("vehiculos", lista);
         r.put("yo", p == null ? null : marcador(p, hoy));
         r.put("nombre", nombreDe(u));
+        r.put("sin_persona", p == null);
         return r;
+    }
+
+    // Cuenta sin persona (ej. la cuenta principal del administrador): se liga una sola vez para ver "Mi vehículo"
+    public Map<String, Object> ligarMiPersona(Long idPersona) {
+        Usuario u = usuarioActual();
+        if (u.getPersona() != null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Tu cuenta ya está ligada a " + u.getPersona().getNombreCompleto());
+        if (idPersona == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Elige tu nombre");
+        Persona p = personaRepository.findById(idPersona).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La persona no existe"));
+        Integer otra = jdbc.queryForObject("select count(*) from usuarios where id_persona = ? and id_usuario <> ?", Integer.class, idPersona, u.getIdUsuario());
+        if (otra != null && otra > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, p.getNombreCompleto() + " ya tiene otra cuenta en DOZZER");
+        u.setPersona(p);
+        usuarioRepository.save(u);
+        return perfil();
     }
 
     // ===================== Lista y ficha =====================
