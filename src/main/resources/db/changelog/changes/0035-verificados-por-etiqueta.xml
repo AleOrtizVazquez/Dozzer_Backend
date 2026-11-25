@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.31.xsd">
+
+    <!-- Los bienes etiquetados antes de existir "Verificado" ya se revisaron físicamente al pegarles la etiqueta:
+         se marcan con la fecha en que se pegó y el nombre de quien la pegó. Solo toca los que no tienen verificación. -->
+    <changeSet id="0035-verificados-por-etiqueta" author="dozzer">
+        <sql>
+            UPDATE bienes b
+               SET fecha_verificacion = COALESCE(e.fecha_asignacion, b.fecha_actualizacion, CURRENT_TIMESTAMP),
+                   verificado_por = LEFT(COALESCE(p.nombre_completo, u.correo, 'Etiquetado antes de esta función'), 200)
+              FROM etiquetas e
+              LEFT JOIN usuarios u ON u.id_usuario = e.id_usuario_asigno
+              LEFT JOIN cat_personas p ON p.id_persona = u.id_persona
+             WHERE e.codigo = b.etiqueta
+               AND e.estado = 'ASIGNADA'
+               AND b.fecha_verificacion IS NULL;
+        </sql>
+        <!-- Por si alguno tiene etiqueta sin registro en la tabla de etiquetas -->
+        <sql>
+            UPDATE bienes
+               SET fecha_verificacion = COALESCE(fecha_actualizacion, CURRENT_TIMESTAMP),
+                   verificado_por = 'Etiquetado antes de esta función'
+             WHERE etiqueta IS NOT NULL
+               AND TRIM(etiqueta) &lt;&gt; ''
+               AND fecha_verificacion IS NULL;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
