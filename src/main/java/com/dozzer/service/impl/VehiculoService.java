@@ -88,6 +88,11 @@ public class VehiculoService {
     // Para la sesión larga: quien maneja un vehículo o administra la flota no debe estar entrando a cada rato
     @Transactional(readOnly = true)
     public boolean usaFlota(Usuario u) {
+        try { return usaFlotaSinError(u); }
+        catch (Exception e) { return false; }   // nunca debe impedir entrar
+    }
+
+    private boolean usaFlotaSinError(Usuario u) {
         if (u == null) return false;
         if (u.getRoles().stream().anyMatch(r -> "FLOTA".equalsIgnoreCase(r.getNombre()))) return true;
         Long p = idPersona(u);
@@ -109,7 +114,13 @@ public class VehiculoService {
                 : jdbc.queryForList("select * from vehiculos where activo and id_persona_responsable = ? order by placas", p);
         LocalDate hoy = LocalDate.now(MX);
         List<Map<String, Object>> lista = new ArrayList<>();
-        for (Map<String, Object> v : mios) lista.add(resumen(v, hoy, true));
+        String sem = semana(LocalDateTime.now(MX));
+        for (Map<String, Object> v : mios) {
+            Map<String, Object> m = resumen(v, hoy, true);
+            Integer n = jdbc.queryForObject("select count(*) from vehiculo_revisiones where id_vehiculo = ? and semana = ?", Integer.class, num(v.get("id_vehiculo")), sem);
+            m.put("pit_semana", n != null && n > 0);
+            lista.add(m);
+        }
         r.put("vehiculos", lista);
         r.put("yo", p == null ? null : marcador(p, hoy));
         r.put("nombre", nombreDe(u));
@@ -129,6 +140,7 @@ public class VehiculoService {
         for (Map<String, Object> v : jdbc.queryForList("select * from vehiculos where activo order by sede_nombre, placas")) {
             Long id = num(v.get("id_vehiculo"));
             Map<String, Object> m = resumen(v, hoy, false, ultimas.get(id), abiertos.getOrDefault(id, 0));
+            m.put("codigo_qr", v.get("codigo_qr"));
             Long per = num(v.get("id_persona_responsable"));
             m.put("responsable_con_acceso", per != null && conUsuario.contains(per));
             r.add(m);
@@ -530,7 +542,8 @@ public class VehiculoService {
             if (per != null && conUsuario.contains(per) && !pospuestos.contains(id + "|reporte")) {
                 LocalDateTime f = u == null ? null : fechaHora(u.get("fecha"));
                 long d = f == null ? 999 : ChronoUnit.DAYS.between(f.toLocalDate(), hoy);
-                if (d >= 14) tarjetas.add(tarjeta("reporte", "ambar", v, f == null ? "Nunca ha hecho su Pit Stop" : "Sin Pit Stop desde hace " + dias(d),
+                // Solo si ya reportaba y dejó de hacerlo (a quien nunca ha reportado le llega el recordatorio de los lunes)
+                if (f != null && d >= 14) tarjetas.add(tarjeta("reporte", "ambar", v, "Sin Pit Stop desde hace " + dias(d),
                         Objects.toString(v.get("responsable_nombre"), ""), null, accion("recordar", "Recordarle", true), accion("posponer", "Después", false)));
             }
             if (per == null) sinResponsable.add(id);
