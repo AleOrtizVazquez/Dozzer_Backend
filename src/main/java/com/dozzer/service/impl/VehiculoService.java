@@ -129,13 +129,25 @@ public class VehiculoService {
     }
 
     // Cuenta sin persona (ej. la cuenta principal del administrador): se liga una sola vez para ver "Mi vehículo"
-    public Map<String, Object> ligarMiPersona(Long idPersona) {
+    // Si la persona ya tiene otra cuenta (p. ej. la que se creó con "Dar acceso" para su vehículo), un administrador
+    // puede quedarse con ella (reemplazar=true): la otra cuenta se desliga y se desactiva, porque es la misma persona.
+    @Transactional
+    public Map<String, Object> ligarMiPersona(Long idPersona, boolean reemplazar) {
         Usuario u = usuarioActual();
         if (u.getPersona() != null) throw new ResponseStatusException(HttpStatus.CONFLICT, "Tu cuenta ya está ligada a " + u.getPersona().getNombreCompleto());
         if (idPersona == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Elige tu nombre");
         Persona p = personaRepository.findById(idPersona).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "La persona no existe"));
-        Integer otra = jdbc.queryForObject("select count(*) from usuarios where id_persona = ? and id_usuario <> ?", Integer.class, idPersona, u.getIdUsuario());
-        if (otra != null && otra > 0) throw new ResponseStatusException(HttpStatus.CONFLICT, p.getNombreCompleto() + " ya tiene otra cuenta en DOZZER");
+        List<Map<String, Object>> otras = jdbc.queryForList("select u.id_usuario, u.correo, " +
+                "exists(select 1 from usuario_roles ur join roles r on r.id = ur.id_rol where ur.id_usuario = u.id_usuario and r.nombre = 'ADMIN') admin " +
+                "from usuarios u where u.id_persona = ? and u.id_usuario <> ?", idPersona, u.getIdUsuario());
+        if (!otras.isEmpty()) {
+            String correos = otras.stream().map(o -> String.valueOf(o.get("correo"))).collect(Collectors.joining(", "));
+            boolean otraEsAdmin = otras.stream().anyMatch(o -> Boolean.TRUE.equals(o.get("admin")));
+            if (!reemplazar || !esAdminGeneral() || otraEsAdmin)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, p.getNombreCompleto() + " ya tiene otra cuenta en DOZZER (" + correos + ")");
+            for (Map<String, Object> o : otras)
+                jdbc.update("update usuarios set id_persona = null, activo = false where id_usuario = ?", num(o.get("id_usuario")));
+        }
         u.setPersona(p);
         usuarioRepository.save(u);
         return perfil();

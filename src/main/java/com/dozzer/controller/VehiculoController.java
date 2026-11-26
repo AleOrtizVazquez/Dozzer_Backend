@@ -32,7 +32,8 @@ public class VehiculoController {
     @PostMapping("/mi-persona")
     public Map<String, Object> ligarMiPersona(@RequestBody Map<String, Object> d) {
         Object p = d == null ? null : d.get("idPersona");
-        return service.ligarMiPersona(p == null || String.valueOf(p).isBlank() ? null : Long.valueOf(String.valueOf(p)));
+        boolean reemplazar = d != null && Boolean.parseBoolean(String.valueOf(d.get("reemplazar")));
+        return service.ligarMiPersona(p == null || String.valueOf(p).isBlank() ? null : Long.valueOf(String.valueOf(p)), reemplazar);
     }
 
     @GetMapping("/qr/{codigo}")
