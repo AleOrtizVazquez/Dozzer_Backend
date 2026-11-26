@@ -130,7 +130,7 @@ public class VehiculoService {
 
     // Cuenta sin persona (ej. la cuenta principal del administrador): se liga una sola vez para ver "Mi vehículo"
     // Si la persona ya tiene otra cuenta (p. ej. la que se creó con "Dar acceso" para su vehículo), un administrador
-    // puede quedarse con ella (reemplazar=true): la otra cuenta se desliga y se desactiva, porque es la misma persona.
+    // puede quedarse con ella (reemplazar=true): la otra cuenta se desliga; si no es de administrador, además se desactiva.
     @Transactional
     public Map<String, Object> ligarMiPersona(Long idPersona, boolean reemplazar) {
         Usuario u = usuarioActual();
@@ -142,11 +142,15 @@ public class VehiculoService {
                 "from usuarios u where u.id_persona = ? and u.id_usuario <> ?", idPersona, u.getIdUsuario());
         if (!otras.isEmpty()) {
             String correos = otras.stream().map(o -> String.valueOf(o.get("correo"))).collect(Collectors.joining(", "));
-            boolean otraEsAdmin = otras.stream().anyMatch(o -> Boolean.TRUE.equals(o.get("admin")));
-            if (!reemplazar || !esAdminGeneral() || otraEsAdmin)
+            if (!reemplazar || !esAdminGeneral())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, p.getNombreCompleto() + " ya tiene otra cuenta en DOZZER (" + correos + ")");
-            for (Map<String, Object> o : otras)
-                jdbc.update("update usuarios set id_persona = null, activo = false where id_usuario = ?", num(o.get("id_usuario")));
+            // Una cuenta de administrador solo se desliga del nombre (sigue funcionando); las demás se desactivan
+            for (Map<String, Object> o : otras) {
+                if (Boolean.TRUE.equals(o.get("admin")))
+                    jdbc.update("update usuarios set id_persona = null where id_usuario = ?", num(o.get("id_usuario")));
+                else
+                    jdbc.update("update usuarios set id_persona = null, activo = false where id_usuario = ?", num(o.get("id_usuario")));
+            }
         }
         u.setPersona(p);
         usuarioRepository.save(u);
