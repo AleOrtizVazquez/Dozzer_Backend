@@ -466,17 +466,34 @@ public class VehiculoService {
         return r;
     }
 
-    // Liga varios de una vez (lo que el administrador confirmó)
+    // Liga varios de una vez (lo que el administrador confirmó). Cada vehículo se guarda por separado:
+    // si uno falla, los demás quedan ligados y se informa cuál falló y por qué.
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public Map<String, Object> ligarResponsables(List<Map<String, Object>> pares) {
         soloAdmin();
+        String quien = nombreDe(usuarioActual());
         int n = 0;
+        List<String> fallas = new ArrayList<>();
         for (Map<String, Object> par : pares) {
             Long id = num(par.get("id_vehiculo")), per = num(par.get("id_persona"));
             if (id == null || per == null) continue;
-            asignarResponsable(id, per);
-            n++;
+            try {
+                String nombre = personaRepository.findById(per).map(Persona::getNombreCompleto)
+                        .orElseThrow(() -> new IllegalArgumentException("la persona ya no existe"));
+                int filas = jdbc.update("update vehiculos set id_persona_responsable = ?, responsable_nombre = ?, fecha_actualizacion = ? where id_vehiculo = ? and activo",
+                        per, nombre, ahora(), id);
+                if (filas == 0) throw new IllegalArgumentException("el vehículo no existe o se dio de baja");
+                evento(id, "RESPONSABLE", "Nuevo responsable: " + nombre, quien);
+                n++;
+            } catch (Exception e) {
+                log.error("No se pudo ligar el vehículo {} a la persona {}", id, per, e);
+                fallas.add("Vehículo " + id + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : corto(e.getMessage(), 200)));
+            }
         }
-        return Map.of("ligados", n);
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("ligados", n);
+        r.put("fallas", fallas);
+        return r;
     }
 
     // Qué tanto se parecen dos nombres (0 a 1): palabras iguales sin importar orden ni acentos, tolerando una letra de diferencia

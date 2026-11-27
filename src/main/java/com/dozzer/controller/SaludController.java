@@ -13,6 +13,6 @@ public class SaludController {
     @GetMapping("/api/salud")
     public Map<String, Object> salud() {
         // "v" identifica la versión publicada (para saber si Render ya tomó el último cambio)
-        return Map.of("ok", true, "v", "2026-11-25-vehiculos-3");
+        return Map.of("ok", true, "v", "2026-11-27-ligar-diagnostico");
     }
 }
