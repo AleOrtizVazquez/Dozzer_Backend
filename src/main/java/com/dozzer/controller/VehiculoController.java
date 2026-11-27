@@ -90,6 +90,18 @@ public class VehiculoController {
         return service.asignarResponsable(id, idPersona);
     }
 
+    @GetMapping("/responsables/sugerencias")
+    public List<Map<String, Object>> sugerenciasResponsables() { return service.sugerenciasResponsables(); }
+
+    @PostMapping("/responsables/ligar")
+    public Map<String, Object> ligarResponsables(@RequestBody Map<String, Object> cuerpo) {
+        Object pares = cuerpo == null ? null : cuerpo.get("pares");
+        if (!(pares instanceof List<?> l)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No hay nada que ligar");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lista = l.stream().filter(Map.class::isInstance).map(x -> (Map<String, Object>) x).toList();
+        return service.ligarResponsables(lista);
+    }
+
     @PostMapping("/{id:\\d+}/poliza")
     public Map<String, Object> poliza(@PathVariable Long id, @RequestBody Map<String, Object> d) { return service.renovarPoliza(id, d); }
 

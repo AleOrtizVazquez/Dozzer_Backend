@@ -431,6 +431,84 @@ public class VehiculoService {
         return ficha(id);
     }
 
+    // ===================== Ligar responsables escritos como texto =====================
+
+    // Vehículos con nombre de responsable pero sin persona del catálogo: propone a quién ligar cada uno
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> sugerenciasResponsables() {
+        soloAdmin();
+        List<Persona> personas = personaRepository.findAll().stream().filter(p -> !Boolean.FALSE.equals(p.getEstatus()) && p.getNombreCompleto() != null).toList();
+        List<Map<String, Object>> vehs = jdbc.queryForList("select id_vehiculo, placas, marca, modelo, responsable_nombre from vehiculos " +
+                "where activo and id_persona_responsable is null and responsable_nombre is not null and trim(responsable_nombre) <> '' order by responsable_nombre, placas");
+        List<Map<String, Object>> r = new ArrayList<>();
+        for (Map<String, Object> v : vehs) {
+            String nombre = String.valueOf(v.get("responsable_nombre"));
+            List<Map<String, Object>> cands = new ArrayList<>();
+            for (Persona p : personas) {
+                double s = parecido(nombre, p.getNombreCompleto());
+                if (s < 0.5) continue;
+                Map<String, Object> c = new LinkedHashMap<>();
+                c.put("id_persona", p.getIdPersona());
+                c.put("nombre", p.getNombreCompleto());
+                c.put("parecido", Math.round(s * 100));
+                cands.add(c);
+            }
+            cands.sort((a, b) -> Long.compare((Long) b.get("parecido"), (Long) a.get("parecido")));
+            if (cands.size() > 4) cands = new ArrayList<>(cands.subList(0, 4));
+            Map<String, Object> m = new LinkedHashMap<>(v);
+            m.put("candidatos", cands);
+            // Se propone solo si el mejor es claro: muy parecido y sin otro casi igual de cerca
+            boolean claro = !cands.isEmpty() && (Long) cands.get(0).get("parecido") >= 75
+                    && (cands.size() == 1 || (Long) cands.get(0).get("parecido") - (Long) cands.get(1).get("parecido") >= 15);
+            m.put("propuesta", claro ? cands.get(0).get("id_persona") : null);
+            r.add(m);
+        }
+        return r;
+    }
+
+    // Liga varios de una vez (lo que el administrador confirmó)
+    public Map<String, Object> ligarResponsables(List<Map<String, Object>> pares) {
+        soloAdmin();
+        int n = 0;
+        for (Map<String, Object> par : pares) {
+            Long id = num(par.get("id_vehiculo")), per = num(par.get("id_persona"));
+            if (id == null || per == null) continue;
+            asignarResponsable(id, per);
+            n++;
+        }
+        return Map.of("ligados", n);
+    }
+
+    // Qué tanto se parecen dos nombres (0 a 1): palabras iguales sin importar orden ni acentos, tolerando una letra de diferencia
+    private static double parecido(String a, String b) {
+        List<String> x = Arrays.stream(norm(a).split(" ")).filter(s -> s.length() > 1).toList();
+        List<String> y = new ArrayList<>(Arrays.stream(norm(b).split(" ")).filter(s -> s.length() > 1).toList());
+        if (x.isEmpty() || y.isEmpty()) return 0;
+        int total = Math.max(x.size(), y.size());
+        double iguales = 0;
+        for (String w : x) {
+            String mejor = null; double pts = 0;
+            for (String z : y) {
+                double p = w.equals(z) ? 1 : (w.length() >= 4 && z.length() >= 4 && distancia(w, z) <= 1) ? 0.85 : 0;
+                if (p > pts) { pts = p; mejor = z; }
+            }
+            if (mejor != null) { iguales += pts; y.remove(mejor); }
+        }
+        return iguales / total;
+    }
+
+    private static int distancia(String a, String b) {
+        int[] prev = new int[b.length() + 1], cur = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) prev[j] = j;
+        for (int i = 1; i <= a.length(); i++) {
+            cur[0] = i;
+            for (int j = 1; j <= b.length(); j++)
+                cur[j] = Math.min(Math.min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1));
+            int[] t = prev; prev = cur; cur = t;
+        }
+        return prev[b.length()];
+    }
+
     // ===================== Importar el Excel (una vez) =====================
 
     public Map<String, Object> importar(List<Map<String, Object>> filas) {
