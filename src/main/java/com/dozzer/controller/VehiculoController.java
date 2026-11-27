@@ -51,10 +51,13 @@ public class VehiculoController {
                                                 @RequestParam String datos,
                                                 @RequestParam(required = false) Integer segundos,
                                                 @RequestParam(required = false) String qr,
-                                                @RequestParam(required = false) MultipartFile foto) throws IOException {
+                                                @RequestParam(required = false) MultipartFile foto,
+                                                @RequestParam(required = false) MultipartFile fotoTablero) throws IOException {
         if (datos.length() > 20_000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Datos demasiado grandes");
         byte[] bytes = foto != null && !foto.isEmpty() ? foto.getBytes() : null;
-        return service.registrarRevision(id, qr, km, segundos, datos, bytes, foto != null ? foto.getContentType() : null);
+        byte[] tablero = fotoTablero != null && !fotoTablero.isEmpty() ? fotoTablero.getBytes() : null;
+        return service.registrarRevision(id, qr, km, segundos, datos, bytes, foto != null ? foto.getContentType() : null,
+                tablero, fotoTablero != null ? fotoTablero.getContentType() : null);
     }
 
     // ---- Administrador de flota ----

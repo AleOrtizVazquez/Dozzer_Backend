@@ -164,12 +164,12 @@ public class VehiculoService {
         soloAdmin();
         LocalDate hoy = LocalDate.now(MX);
         Map<Long, Map<String, Object>> ultimas = ultimasRevisiones();
-        Map<Long, Integer> abiertos = conteoPendientes();
+        Map<Long, int[]> abiertos = conteoPendientes();
         Set<Long> conUsuario = personasConUsuario();
         List<Map<String, Object>> r = new ArrayList<>();
         for (Map<String, Object> v : jdbc.queryForList("select * from vehiculos where activo order by sede_nombre, placas")) {
             Long id = num(v.get("id_vehiculo"));
-            Map<String, Object> m = resumen(v, hoy, false, ultimas.get(id), abiertos.getOrDefault(id, 0));
+            Map<String, Object> m = resumen(v, hoy, false, ultimas.get(id), abiertos.getOrDefault(id, new int[2]));
             m.put("codigo_qr", v.get("codigo_qr"));
             Long per = num(v.get("id_persona_responsable"));
             m.put("responsable_con_acceso", per != null && conUsuario.contains(per));
@@ -187,7 +187,7 @@ public class VehiculoService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Este vehículo no está a tu cargo");
         }
         LocalDate hoy = LocalDate.now(MX);
-        Map<String, Object> r = resumen(v, hoy, true, ultimasRevisiones(id).stream().findFirst().orElse(null), conteoPendientes().getOrDefault(id, 0));
+        Map<String, Object> r = resumen(v, hoy, true);
         r.put("pendientes", jdbc.queryForList("select * from vehiculo_pendientes where id_vehiculo = ? and estado in ('ABIERTO','EN_TALLER') order by fecha_creacion desc", id));
         if (admin) {
             r.put("revisiones", ultimasRevisiones(id).stream().limit(12).map(this::revisionVista).toList());
@@ -207,11 +207,22 @@ public class VehiculoService {
 
     private Map<String, Object> resumen(Map<String, Object> v, LocalDate hoy, boolean completo) {
         Long id = num(v.get("id_vehiculo"));
-        return resumen(v, hoy, completo, ultimasRevisiones(id).stream().findFirst().orElse(null), conteoPendientes().getOrDefault(id, 0));
+        return resumen(v, hoy, completo, ultimasRevisiones(id).stream().findFirst().orElse(null), conteoPendientes().getOrDefault(id, new int[2]));
+    }
+
+    // Cada punto que se le quita a la salud queda escrito, para que se vea de dónde sale el %
+    private static int menos(List<Map<String, Object>> desglose, int puntos, String motivo) {
+        Map<String, Object> d = new LinkedHashMap<>();
+        d.put("puntos", puntos);
+        d.put("motivo", motivo);
+        desglose.add(d);
+        return puntos;
     }
 
     // Semáforo y salud calculados (nadie los captura)
-    private Map<String, Object> resumen(Map<String, Object> v, LocalDate hoy, boolean completo, Map<String, Object> ultima, int abiertos) {
+    private Map<String, Object> resumen(Map<String, Object> v, LocalDate hoy, boolean completo, Map<String, Object> ultima, int[] pend) {
+        int abiertos = pend[0], graves = pend[1];
+        List<Map<String, Object>> desglose = new ArrayList<>();
         Map<String, Object> m = new LinkedHashMap<>();
         for (String k : List.of("id_vehiculo", "consecutivo", "marca", "modelo", "anio", "color", "placas", "numero_serie", "tarjeta_circulacion",
                 "numero_economico", "estado", "id_sede", "sede_nombre", "id_persona_responsable", "responsable_nombre", "poliza_numero", "aseguradora",
@@ -223,11 +234,11 @@ public class VehiculoService {
 
         // Seguro
         LocalDate vig = fecha(v.get("poliza_vigencia"));
-        if (vig == null) { items.add(item("poliza", "Seguro", "rojo", "Sin póliza registrada")); salud -= 30; }
+        if (vig == null) { items.add(item("poliza", "Seguro", "rojo", "Sin póliza registrada")); salud -= menos(desglose, 30, "Sin seguro registrado"); }
         else {
             long d = ChronoUnit.DAYS.between(hoy, vig);
-            if (d < 0) { items.add(item("poliza", "Seguro", "rojo", "Venció hace " + dias(-d))); salud -= 30; }
-            else if (d <= 30) { items.add(item("poliza", "Seguro", "ambar", d == 0 ? "Vence hoy" : "Vence en " + dias(d))); salud -= 5; }
+            if (d < 0) { items.add(item("poliza", "Seguro", "rojo", "Venció hace " + dias(-d))); salud -= menos(desglose, 30, "Seguro vencido"); }
+            else if (d <= 30) { items.add(item("poliza", "Seguro", "ambar", d == 0 ? "Vence hoy" : "Vence en " + dias(d))); salud -= menos(desglose, 5, "El seguro vence pronto"); }
             else items.add(item("poliza", "Seguro", "verde", "Vigente hasta " + texto(vig)));
         }
         // Verificación
@@ -235,21 +246,21 @@ public class VehiculoService {
         if (ver == null) items.add(item("verificacion", "Verificación", "gris", "Sin fecha de próxima verificación"));
         else {
             long d = ChronoUnit.DAYS.between(hoy, ver);
-            if (d < 0) { items.add(item("verificacion", "Verificación", "rojo", "Atrasada " + dias(-d))); salud -= 20; }
-            else if (d <= 30) { items.add(item("verificacion", "Verificación", "ambar", "Toca en " + dias(d))); salud -= 5; }
+            if (d < 0) { items.add(item("verificacion", "Verificación", "rojo", "Atrasada " + dias(-d))); salud -= menos(desglose, 20, "Verificación atrasada"); }
+            else if (d <= 30) { items.add(item("verificacion", "Verificación", "ambar", "Toca en " + dias(d))); salud -= menos(desglose, 5, "Verificación próxima"); }
             else items.add(item("verificacion", "Verificación", "verde", "Próxima: " + texto(ver)));
         }
         // Tenencia (se paga en el primer trimestre)
         Integer ten = entero(v.get("tenencia_anio"));
         if (ten == null) items.add(item("tenencia", "Tenencia", "gris", "Sin registro de pago"));
         else if (ten >= hoy.getYear()) items.add(item("tenencia", "Tenencia", "verde", "Pagada " + ten));
-        else if (hoy.getMonthValue() > 3) { items.add(item("tenencia", "Tenencia", "rojo", "Falta pagar " + hoy.getYear())); salud -= 10; }
+        else if (hoy.getMonthValue() > 3) { items.add(item("tenencia", "Tenencia", "rojo", "Falta pagar " + hoy.getYear())); salud -= menos(desglose, 10, "Tenencia " + hoy.getYear() + " sin pagar"); }
         else items.add(item("tenencia", "Tenencia", "ambar", "Pagar " + hoy.getYear() + " antes del 31 de marzo"));
         // Servicio (por kilometraje o por tiempo, lo que llegue primero)
         Map<String, Object> srv = servicio(v, hoy);
         String eSrv = String.valueOf(srv.get("estado"));
         items.add(item("servicio", "Servicio", eSrv, String.valueOf(srv.get("texto"))));
-        if ("rojo".equals(eSrv)) salud -= 20; else if ("ambar".equals(eSrv)) salud -= 5;
+        if ("rojo".equals(eSrv)) salud -= menos(desglose, 20, "Servicio vencido"); else if ("ambar".equals(eSrv)) salud -= menos(desglose, 5, "Servicio próximo");
         m.put("servicio", srv);
         // Reporte semanal
         if (ultima == null) items.add(item("reporte", "Pit Stop", "gris", "Todavía no hay reportes"));
@@ -257,12 +268,20 @@ public class VehiculoService {
             LocalDateTime f = fechaHora(ultima.get("fecha"));
             long d = f == null ? 999 : ChronoUnit.DAYS.between(f.toLocalDate(), hoy);
             String et = d == 0 ? "hoy" : d == 1 ? "ayer" : "hace " + dias(d);
-            if (d > 14) { items.add(item("reporte", "Pit Stop", "ambar", "Último reporte " + et)); salud -= 10; }
+            if (d > 14) { items.add(item("reporte", "Pit Stop", "ambar", "Último reporte " + et)); salud -= menos(desglose, 10, "Más de 2 semanas sin Pit Stop"); }
             else items.add(item("reporte", "Pit Stop", "verde", "Último reporte " + et));
             m.put("ultima_revision", ultima.get("fecha"));
         }
         // Problemas abiertos
-        if (abiertos > 0) { items.add(item("problemas", "Pendientes", "ambar", abiertos + (abiertos == 1 ? " problema por atender" : " problemas por atender"))); salud -= Math.min(30, 10 * abiertos); }
+        // Un problema grave (frenos, testigo rojo, llanta en mal estado…) pesa 3 veces más que uno leve
+        if (abiertos > 0) {
+            int leves = Math.max(0, abiertos - graves);
+            items.add(item("problemas", "Pendientes", graves > 0 ? "rojo" : "ambar", abiertos + (abiertos == 1 ? " problema por atender" : " problemas por atender")
+                    + (graves > 0 ? " (" + graves + (graves == 1 ? " grave)" : " graves)") : "")));
+            int quita = Math.min(45, 15 * graves + 5 * leves);
+            salud -= menos(desglose, quita, (graves > 0 ? graves + (graves == 1 ? " grave" : " graves") : "") + (graves > 0 && leves > 0 ? " y " : "")
+                    + (leves > 0 ? leves + (leves == 1 ? " leve" : " leves") : "") + " por atender");
+        }
 
         String semaforo = items.stream().anyMatch(i -> "rojo".equals(i.get("estado"))) ? "rojo"
                 : items.stream().anyMatch(i -> "ambar".equals(i.get("estado"))) ? "ambar" : "verde";
@@ -270,6 +289,8 @@ public class VehiculoService {
         m.put("semaforo", semaforo);
         m.put("salud", Math.max(0, Math.min(100, salud)));
         m.put("pendientes_abiertos", abiertos);
+        m.put("pendientes_graves", graves);
+        m.put("desglose", desglose);
         return m;
     }
 
@@ -324,10 +345,11 @@ public class VehiculoService {
         return jdbc.queryForList("select * from vehiculo_revisiones where id_vehiculo = ? order by fecha desc limit 40", id);
     }
 
-    private Map<Long, Integer> conteoPendientes() {
-        Map<Long, Integer> r = new HashMap<>();
-        jdbc.query("select id_vehiculo, count(*) n from vehiculo_pendientes where estado in ('ABIERTO','EN_TALLER') group by id_vehiculo",
-                rs -> { r.put(rs.getLong(1), rs.getInt(2)); });
+    // {abiertos, graves} por vehículo
+    private Map<Long, int[]> conteoPendientes() {
+        Map<Long, int[]> r = new HashMap<>();
+        jdbc.query("select id_vehiculo, count(*) n, count(*) filter (where tipo = 'PROBLEMA_GRAVE') g from vehiculo_pendientes where estado in ('ABIERTO','EN_TALLER') group by id_vehiculo",
+                rs -> { r.put(rs.getLong(1), new int[]{rs.getInt(2), rs.getInt(3)}); });
         return r;
     }
 
@@ -349,6 +371,7 @@ public class VehiculoService {
         Map<String, Object> m = new LinkedHashMap<>(x);
         m.remove("datos");
         try { m.put("detalle", x.get("datos") == null ? null : JSON.readValue(String.valueOf(x.get("datos")), Map.class)); } catch (Exception e) { m.put("detalle", null); }
+        if (m.get("detalle") instanceof Map<?, ?> det && det.get("foto_tablero") != null) m.put("foto_tablero_url", fotoStorage.urlGrande(String.valueOf(det.get("foto_tablero"))));
         Object k = x.get("foto_key");
         m.put("foto_url", k == null ? null : fotoStorage.urlGrande(String.valueOf(k)));
         m.remove("foto_key");
@@ -1002,6 +1025,10 @@ public class VehiculoService {
         Integer km = entero(v.get("km_actual"));
         r.put("km_anterior", km);
         r.put("km_semana", kmPorSemana(id));
+        r.put("km_fecha", v.get("km_fecha"));
+        Map<String, Object> srv = servicio(v, hoy);
+        r.put("servicio_restan_km", srv.get("restan_km"));
+        r.put("servicio_cada_km", Optional.ofNullable(entero(v.get("servicio_cada_km"))).orElse(10000));
         Integer hecha = jdbc.queryForObject("select count(*) from vehiculo_revisiones where id_vehiculo = ? and semana = ?", Integer.class, id, semana(LocalDateTime.now(MX)));
         r.put("ya_esta_semana", hecha != null && hecha > 0);
         // Preguntas que cambian cada semana según lo que toca revisar
@@ -1021,20 +1048,25 @@ public class VehiculoService {
                 Integer val = entero(e.getValue());
                 if (val != null && val < 40 && !"aceite".equals(String.valueOf(e.getKey()))) preguntas.add(Map.of("campo", String.valueOf(e.getKey()), "texto", "La semana pasada estaba bajo. ¿Ya se rellenó?"));
             }
+            if (dat.get("fuga") instanceof Map<?, ?> fg && Boolean.TRUE.equals(fg.get("hay")) && !"transparente".equals(String.valueOf(fg.get("color"))))
+                preguntas.add(Map.of("campo", "fuga", "texto", "La semana pasada viste una mancha debajo. Fíjate si sigue goteando."));
+            if (dat.get("testigos") instanceof List<?> tl && !tl.isEmpty())
+                preguntas.add(Map.of("campo", "testigo", "texto", "La semana pasada había " + (tl.size() == 1 ? "un testigo encendido" : tl.size() + " testigos encendidos") + ". ¿Siguen prendidos?"));
         }
         r.put("preguntas", preguntas);
         r.put("hoy", hoy.toString());
         return r;
     }
 
-    public Map<String, Object> registrarRevision(Long id, String qr, Integer km, Integer segundos, String datosJson, byte[] foto, String tipoFoto) {
+    public Map<String, Object> registrarRevision(Long id, String qr, Integer km, Integer segundos, String datosJson, byte[] foto, String tipoFoto, byte[] fotoTablero, String tipoFotoTablero) {
         Map<String, Object> v = vehiculoParaRevisar(id, qr);
         Usuario u = usuarioActual();
         LocalDateTime ahora = LocalDateTime.now(MX);
         if (km == null || km < 0 || km > 3_000_000) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Escribe el kilometraje del tablero");
         Integer anterior = entero(v.get("km_actual"));
         if (anterior != null && km < anterior) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El kilometraje no puede ser menor que el último reportado (" + fmt(anterior) + " km)");
-        Map<?, ?> datos = leer(datosJson);
+        Map<String, Object> datos = new LinkedHashMap<>();
+        leer(datosJson).forEach((k, x) -> datos.put(String.valueOf(k), x));
         if (datos.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan los datos del Pit Stop");
 
         // ---- Qué está mal (el sistema lo convierte en pendientes) ----
@@ -1049,18 +1081,51 @@ public class VehiculoService {
         if (datos.get("luces") instanceof Map<?, ?> lu) for (Map.Entry<?, ?> e : lu.entrySet()) {
             if ("falla".equals(String.valueOf(e.getValue()))) problemas.add(new String[]{"Falla en " + nombresLuz.getOrDefault(String.valueOf(e.getKey()), "una luz"), "leve"});
         }
-        Map<String, String> nombresNivel = Map.of("aceite", "Aceite de motor", "frenos", "Líquido de frenos", "direccion", "Líquido de dirección", "limpia", "Limpiaparabrisas");
+        // Niveles: 100 lleno (MAX), 70 bien, 30 en el mínimo, 10 debajo del mínimo; null = el vehículo no lo tiene
+        Map<String, String> nombresNivel = Map.of("aceite", "Aceite de motor", "anticongelante", "Anticongelante", "frenos", "Líquido de frenos",
+                "direccion", "Líquido de dirección", "limpia", "Limpiaparabrisas");
+        Set<String> nivelesCriticos = Set.of("aceite", "frenos", "anticongelante");
         if (datos.get("niveles") instanceof Map<?, ?> nv) for (Map.Entry<?, ?> e : nv.entrySet()) {
             Integer val = entero(e.getValue());
             String k = String.valueOf(e.getKey());
-            if (val != null && val < 35) problemas.add(new String[]{nombresNivel.getOrDefault(k, k) + " bajo", Set.of("aceite", "frenos").contains(k) && val < 20 ? "grave" : "leve"});
+            if (val == null || val >= 35) continue;
+            if (val < 20) problemas.add(new String[]{nombresNivel.getOrDefault(k, k) + " debajo del mínimo", nivelesCriticos.contains(k) ? "grave" : "leve"});
+            else problemas.add(new String[]{nombresNivel.getOrDefault(k, k) + " en el mínimo", "leve"});
         }
-        Map<String, String> nombresTestigo = Map.of("motor", "Check engine", "aceite", "Presión de aceite", "bateria", "Batería", "temperatura", "Temperatura del motor",
-                "frenos", "Frenos", "abs", "ABS", "bolsa", "Bolsa de aire", "llantas", "Presión de llantas");
-        Set<String> testigosGraves = Set.of("aceite", "temperatura", "frenos", "motor");
+        // Cómo se ve el líquido (no solo cuánto hay)
+        Map<String, String[]> aspectos = Map.of(
+                "aceite:oscuro", new String[]{"Aceite de motor muy oscuro (toca cambio)", "leve"},
+                "aceite:lechoso", new String[]{"Aceite lechoso o espumoso (posible junta de cabeza)", "grave"},
+                "anticongelante:sucio", new String[]{"Anticongelante sucio u oxidado", "leve"},
+                "anticongelante:aceitoso", new String[]{"Anticongelante con aceite (posible junta de cabeza)", "grave"},
+                "frenos:oscuro", new String[]{"Líquido de frenos oscuro (toca cambio)", "leve"});
+        if (datos.get("aspecto") instanceof Map<?, ?> as) for (Map.Entry<?, ?> e : as.entrySet()) {
+            String[] p = aspectos.get(e.getKey() + ":" + e.getValue());
+            if (p != null) problemas.add(p);
+        }
+        // Manchas debajo del vehículo: el color dice qué está tirando (transparente es agua del aire acondicionado)
+        Map<String, String[]> fugas = Map.of(
+                "negro", new String[]{"Fuga de aceite de motor (mancha negra o café)", "grave"},
+                "verde", new String[]{"Fuga de anticongelante (mancha verde o rosa)", "grave"},
+                "rojo", new String[]{"Fuga de transmisión o dirección (mancha roja)", "grave"},
+                "amarillo", new String[]{"Posible fuga de líquido de frenos (mancha amarilla aceitosa)", "grave"},
+                "azul", new String[]{"Fuga de limpiaparabrisas (mancha azul)", "leve"});
+        if (datos.get("fuga") instanceof Map<?, ?> fg && Boolean.TRUE.equals(fg.get("hay"))) {
+            String[] p = fugas.get(String.valueOf(fg.get("color")));
+            if (p != null) problemas.add(p);
+        }
+        Map<String, String> nombresTestigo = Map.ofEntries(Map.entry("motor", "Check engine"), Map.entry("aceite", "Presión de aceite"), Map.entry("bateria", "Batería / carga"),
+                Map.entry("temperatura", "Temperatura del motor"), Map.entry("frenos", "Sistema de frenos"), Map.entry("direccion", "Dirección asistida"),
+                Map.entry("bolsa", "Bolsa de aire"), Map.entry("abs", "ABS"), Map.entry("llantas", "Presión de llantas"), Map.entry("estabilidad", "Control de estabilidad"),
+                Map.entry("balatas", "Desgaste de balatas"), Map.entry("servicio", "Servicio requerido"), Map.entry("diesel", "Precalentamiento / filtro diésel"),
+                Map.entry("transmision", "Transmisión"));
+        // Rojos: detenerse. Ámbar: revisar pronto. El check engine parpadeando también es grave (daña el catalizador).
+        Set<String> testigosGraves = Set.of("aceite", "temperatura", "frenos", "bateria", "direccion", "bolsa", "transmision");
+        boolean parpadea = Boolean.TRUE.equals(datos.get("motor_parpadea"));
         if (datos.get("testigos") instanceof List<?> ts) for (Object t : ts) {
             String k = String.valueOf(t);
-            problemas.add(new String[]{"Testigo encendido: " + nombresTestigo.getOrDefault(k, k), testigosGraves.contains(k) ? "grave" : "leve"});
+            boolean grave = testigosGraves.contains(k) || ("motor".equals(k) && parpadea);
+            problemas.add(new String[]{"Testigo encendido: " + nombresTestigo.getOrDefault(k, k) + ("motor".equals(k) && parpadea ? " (parpadeando)" : ""), grave ? "grave" : "leve"});
         }
         boolean golpe = datos.get("golpe") instanceof Map<?, ?> g && Boolean.TRUE.equals(g.get("hay"));
         if (golpe) {
@@ -1094,6 +1159,11 @@ public class VehiculoService {
             fotoKey = fotoStorage.guardar("vehiculos/" + id + "-" + UUID.randomUUID().toString().substring(0, 8), foto,
                     tipoFoto != null && tipoFoto.startsWith("image/") ? tipoFoto : "image/jpeg");
         }
+        if (fotoTablero != null && fotoTablero.length > 0) {
+            if (fotoTablero.length > 8 * 1024 * 1024) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La foto del tablero es demasiado grande");
+            datos.put("foto_tablero", fotoStorage.guardar("vehiculos/" + id + "-tablero-" + UUID.randomUUID().toString().substring(0, 8), fotoTablero,
+                    tipoFotoTablero != null && tipoFotoTablero.startsWith("image/") ? tipoFotoTablero : "image/jpeg"));
+        } else datos.remove("foto_tablero");
         String datosTxt;
         try { datosTxt = JSON.writeValueAsString(datos); } catch (Exception e) { datosTxt = "{}"; }
         final String fk = fotoKey, dt = datosTxt;
@@ -1128,6 +1198,8 @@ public class VehiculoService {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("salud", estado.get("salud"));
         r.put("semaforo", estado.get("semaforo"));
+        r.put("desglose", estado.get("desglose"));
+        r.put("graves", problemas.stream().filter(p -> "grave".equals(p[1])).count());
         r.put("puntos", pts);
         r.put("problemas", problemas.size());
         r.put("km_recorridos", anterior == null ? null : recorridos);
