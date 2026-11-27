@@ -371,7 +371,6 @@ public class VehiculoService {
         Map<String, Object> m = new LinkedHashMap<>(x);
         m.remove("datos");
         try { m.put("detalle", x.get("datos") == null ? null : JSON.readValue(String.valueOf(x.get("datos")), Map.class)); } catch (Exception e) { m.put("detalle", null); }
-        if (m.get("detalle") instanceof Map<?, ?> det && det.get("foto_tablero") != null) m.put("foto_tablero_url", fotoStorage.urlGrande(String.valueOf(det.get("foto_tablero"))));
         Object k = x.get("foto_key");
         m.put("foto_url", k == null ? null : fotoStorage.urlGrande(String.valueOf(k)));
         m.remove("foto_key");
@@ -1058,7 +1057,7 @@ public class VehiculoService {
         return r;
     }
 
-    public Map<String, Object> registrarRevision(Long id, String qr, Integer km, Integer segundos, String datosJson, byte[] foto, String tipoFoto, byte[] fotoTablero, String tipoFotoTablero) {
+    public Map<String, Object> registrarRevision(Long id, String qr, Integer km, Integer segundos, String datosJson, byte[] foto, String tipoFoto) {
         Map<String, Object> v = vehiculoParaRevisar(id, qr);
         Usuario u = usuarioActual();
         LocalDateTime ahora = LocalDateTime.now(MX);
@@ -1159,11 +1158,6 @@ public class VehiculoService {
             fotoKey = fotoStorage.guardar("vehiculos/" + id + "-" + UUID.randomUUID().toString().substring(0, 8), foto,
                     tipoFoto != null && tipoFoto.startsWith("image/") ? tipoFoto : "image/jpeg");
         }
-        if (fotoTablero != null && fotoTablero.length > 0) {
-            if (fotoTablero.length > 8 * 1024 * 1024) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La foto del tablero es demasiado grande");
-            datos.put("foto_tablero", fotoStorage.guardar("vehiculos/" + id + "-tablero-" + UUID.randomUUID().toString().substring(0, 8), fotoTablero,
-                    tipoFotoTablero != null && tipoFotoTablero.startsWith("image/") ? tipoFotoTablero : "image/jpeg"));
-        } else datos.remove("foto_tablero");
         String datosTxt;
         try { datosTxt = JSON.writeValueAsString(datos); } catch (Exception e) { datosTxt = "{}"; }
         final String fk = fotoKey, dt = datosTxt;
